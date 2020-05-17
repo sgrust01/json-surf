@@ -95,7 +95,7 @@ fn main() {
     println!("{:#?}", payload);
     println!("---------------------------");
 
-    let query = "John";
+    let query = "john";
     let users = surfer.read_structs::<User>(&name, query, None, None).unwrap();
     let users = users.unwrap();
 
@@ -104,7 +104,7 @@ fn main() {
     assert_eq!(*user, user_john_doe);
     println!("================================");
     println!("Query: '{}' Select: John Doe",query);
-    println!("--------------------------------");
+    println!("--------------- -----------------");
     println!("{:#?}", user);
     println!("--------------------------------");
 
