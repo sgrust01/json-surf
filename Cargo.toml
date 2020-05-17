@@ -1,0 +1,42 @@
+[package]
+name = "json-surf"
+version = "0.1.0"
+authors = ["Saurav Gupta <sgrust01@gmail.com>"]
+edition = "2018"
+description = """
+Search/Analyze JSON and Rust Struct
+"""
+documentation = "https://docs.rs/json-surf"
+repository = "https://github.com/sgrust01/json-surf.git"
+publish = true
+keywords = ["json","struct", "lucene", "tantivy"]
+license = "MIT"
+categories = ["parsing", "web-programming", "database-implementations", "text-processing"]
+readme = "README.md"
+
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde-value="0.6.0"
+serde_json = "1.0"
+failure= "0.1.6"
+rand = "0.7.3"
+
+
+# Star of the show
+tantivy = "0.12.0"
+
+[dev-dependencies]
+base64 = "0.12.1"
+
+[[example]]
+name="helloworld"
+path="examples/01_helloworld.rs"
+
+[[example]]
+name="username"
+path="examples/02_user_name.rs"
+
+[[example]]
+name="userdata"
+path="examples/03_user_data.rs"
