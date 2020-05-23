@@ -1,6 +1,6 @@
 use std::{thread::sleep, time::Duration, time::Instant};
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use rand::{Rng};
 use rand::distributions::Alphanumeric;
@@ -196,6 +196,19 @@ pub(crate) fn as_schema_builder(data: &Value, control: Option<&HashMap<String, C
     );
     Err(error)
 }
+
+/// List files within a dir
+pub fn ls<T: AsRef<str>>(home: T) -> Result<Vec<PathBuf>, IndexError> {
+    let paths = std::fs::read_dir(home.as_ref())?;
+    let mut entries = Vec::<PathBuf>::new();
+    for path in paths {
+        let entry = path?;
+        let value = entry.path();
+        entries.push(value);
+    };
+    Ok(entries)
+}
+
 
 /// Convenience method to get schema
 pub(crate) fn to_schema(data: &Value, control: Option<&HashMap<String, Control>>) -> Result<Schema, IndexError> {

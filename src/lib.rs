@@ -155,6 +155,7 @@ pub mod seed;
 pub mod errors;
 pub mod utils;
 pub mod registry;
+pub mod fuzzy;
 
 #[cfg(test)]
 mod tests {
