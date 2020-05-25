@@ -3,6 +3,16 @@
   <p><strong>Search/Analyze JSON and Rust Struct</strong> </p>
 </div>
 
+[![Build Status](https://travis-ci.org/sgrust01/json-surf.svg?branch=master)](https://travis-ci.org/sgrust01/json-surf)
+[![codecov](https://codecov.io/gh/sgrust01/json-surf/branch/master/graph/badge.svg)](https://codecov.io/gh/sgrust01/json-surf)
+[![Version](https://img.shields.io/badge/rustc-1.43.1+-blue.svg)](https://blog.rust-lang.org/2020/05/07/Rust.1.43.1.html) 
+![RepoSize](https://img.shields.io/github/repo-size/sgrust01/json-surf)
+![Crates.io](https://img.shields.io/crates/l/json-surf)
+![Crates.io](https://img.shields.io/crates/v/json-surf)
+![Crates.io](https://img.shields.io/crates/d/json-surf)
+![Contributors](https://img.shields.io/github/contributors/sgrust01/json-surf)
+[![Gitter](https://badges.gitter.im/json-surf/community.svg)](https://gitter.im/json-surf/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
+
 Please do check [tantivy](https://github.com/tantivy-search/tantivy) out. Absolute stunner!!! 
 
 This crate is just a convenience crate over [tantivy](https://github.com/tantivy-search/tantivy). 
