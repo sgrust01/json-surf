@@ -8,6 +8,9 @@ Please do check [tantivy](https://github.com/tantivy-search/tantivy) out. Absolu
 This crate is just a convenience crate over [tantivy](https://github.com/tantivy-search/tantivy). 
 
 ## TODO
+
+[![Join the chat at https://gitter.im/json-surf/community](https://badges.gitter.im/json-surf/community.svg)](https://gitter.im/json-surf/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+
 * Add more examples
 * Cleanup tmp folder left behind from test cases
 * Remove any further copy
