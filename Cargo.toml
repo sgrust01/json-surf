@@ -1,6 +1,6 @@
 [package]
 name = "json-surf"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Saurav Gupta <sgrust01@gmail.com>"]
 edition = "2018"
 description = """
@@ -42,3 +42,15 @@ path="examples/02_user_name.rs"
 [[example]]
 name="userdata"
 path="examples/03_user_data.rs"
+
+[[example]]
+name="binarydata"
+path="examples/04_binary_data.rs"
+
+[[example]]
+name="fuzzysearch"
+path="examples/05_fuzzy_search.rs"
+
+[[example]]
+name="fuzzyname"
+path="examples/06_fuzzy_user_name.rs"
