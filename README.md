@@ -13,9 +13,28 @@
 ![Contributors](https://img.shields.io/github/contributors/sgrust01/json-surf)
 [![Gitter](https://badges.gitter.im/json-surf/community.svg)](https://gitter.im/json-surf/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
-Please do check [tantivy](https://github.com/tantivy-search/tantivy) out. Absolute stunner!!! 
 
-This crate is just a convenience crate over [tantivy](https://github.com/tantivy-search/tantivy). 
+## Features
+* Full text search
+* Serialize __**flat**__ JSON/Struct
+* Easy write and read API
+* Write multiple documents together
+* Support fuzzy word search (see examples)
+* Requires no runtime
+* No unsafe block
+* Run on rust stable
+* Coming Soon: Bi-gram suggestion & TF-IDF support
+
+## Motivation
+* Allow your existing flat rust structs to be searched
+* Encoded/Decoded byte streams can be stored along side too, as base64 encoded string
+* The crate will support arbitary byte stream once it is supported by tantivy (see [here](https://github.com/tantivy-search/tantivy/issues/832))
+* This can just act as a container to actual data in databases, keeping indexes light
+* Create time-aware containers which could possibly updated/deleted
+* Create ephemeral storage for request/response
+* This can integrate with any web-server to index and search near real-time
+* This crate is just a convenience crate over [tantivy](https://github.com/tantivy-search/tantivy). 
+* This crate will focus mostly on user-workflow(s) related problem(s)
 
 ## TODO
 * Add more examples
@@ -23,26 +42,6 @@ This crate is just a convenience crate over [tantivy](https://github.com/tantivy
 * Remove any further copy
 * Introduce more housekeeping API (If required)
 
-## Features
-* Full text search
-* Serialize __**flat**__ JSON/Struct
-* Easy write and read API
-* Write multiple documents together
-* Depends mostly on stable crates
-* Support fuzzy word search (see examples)
-* Requires no runtime
-* No unsafe block
-* Run on rust stable
-
-## Motivation
-* Allow your existing flat rust structs to be searched
-* Encoded/Decoded byte streams can be stored along side too, as base64 encoded string
-* This can just act as a container to actual data in databases, keeping indexes light
-* Create time-aware containers which could possibly updated/deleted
-* Create ephemeral storage for request/response
-* This can integrate with any web-server to index and search near real-time
-* This crate will focus mostly on user-workflow(s) related problem(s)
-* Again, [tantivy](https://github.com/tantivy-search/tantivy) is a great library, do check it out
 
 ## Quickstart
 

@@ -4,20 +4,21 @@
 //! * Serialize __**flat**__ JSON/Struct
 //! * Easy write and read API
 //! * Write multiple documents together
-//! * Depends mostly on stable crates
 //! * Requires no runtime
 //! * No unsafe block
 //! * Run on rust stable (Please check the Rust version, 1.39 does not work)
+//! * Coming Soon: Bigram suggestion & TF-IDF support
 //!
 //! ## Motivation
 //! * Allow your existing simples flat rust structs to be searched
 //! * Encoded/Decoded byte streams can be stored along side too as base64 encoded string
+//! * The crate will support arbitary byte stream once it is supported by tantivy (see [here](https://github.com/tantivy-search/tantivy/issues/832))
 //! * This can just act as a container to actual data in databases, keeping indexes light
 //! * Create time-aware containers which could possibly updated/deleted
 //! * Create ephemeral storage for request/response
 //! * This can integrate with any web-server to index and search near real-time
+//! * This crate is just a convenience crate over [tantivy](https://github.com/tantivy-search/tantivy).
 //! * This crate will focus mostly on user-workflow(s) related problem(s)
-//! * Again, [tantivy](https://github.com/tantivy-search/tantivy) is a great library, do check it out
 //!
 //! ## Quickstart
 //!
