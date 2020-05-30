@@ -1,5 +1,7 @@
 use std::collections::{HashMap, BTreeMap};
 use std::convert::TryFrom;
+use std::ops::{Deref, DerefMut};
+use std::fmt;
 
 use tantivy::schema::{Schema, Field, TextOptions, IntOptions};
 use tantivy::{Index, IndexReader, IndexWriter, Document};
@@ -14,13 +16,83 @@ use serde_value::Value;
 use serde::{Serialize};
 use serde::de::DeserializeOwned;
 
+#[derive(Clone, Eq, PartialEq)]
+pub struct SurferSchema {
+    schema: Schema,
+    track_tf: bool,
+    track_tf_idf: bool,
+}
+
+impl SurferSchema {
+    pub fn new(schema: Schema, track_tf: bool, track_tf_idf: bool) -> Self {
+        Self {
+            schema,
+            track_tf,
+            track_tf_idf,
+        }
+    }
+}
+
+impl Deref for SurferSchema {
+    type Target = Schema;
+    fn deref(&self) -> &Self::Target {
+        &self.schema
+    }
+}
+
+impl DerefMut for SurferSchema {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.schema
+    }
+}
+
+impl fmt::Debug for SurferSchema {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let itr = self.schema.fields();
+        let mut fields = Vec::new();
+        for (field, entry) in itr {
+            let debug = format!("Index: {} Name: {} Type: {:?}", field.field_id(), entry.name(), entry.field_type().value_type());
+            fields.push(debug);
+        };
+        write!(f, "{:?}", fields)
+    }
+}
+
+impl fmt::Display for SurferSchema {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let itr = self.schema.fields();
+        for (_, entry) in itr {
+            let debug = format!("Name: {} Type: {:?}\n", entry.name(), entry.field_type().value_type());
+            let _ = write!(f, "{}", debug);
+        };
+        write!(f, "\n")
+    }
+}
+
+
 /// Builder struct for Surfer
-#[derive(Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct SurferBuilder {
-    schemas: HashMap<String, Schema>,
+    schemas: HashMap<String, SurferSchema>,
     home: Option<String>,
 }
 
+impl fmt::Display for SurferBuilder {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let home = self.home.as_ref();
+        let indexes = &self.schemas;
+        for (name, schema) in indexes {
+            let home = resolve_index_directory_path(name, home);
+            let home = match home {
+                Ok(h) => h.to_string_lossy().to_string(),
+                Err(e) => format!("<PathError {}>", e.to_string())
+            };
+            let _ = write!(f, "Index: {} Location: {}\n", name, home);
+            let _ = write!(f, "{}", schema);
+        }
+        write!(f, "\n")
+    }
+}
 
 #[derive(Serialize)]
 struct SingleValuedNamedFieldDocument<'a>(BTreeMap<&'a str, &'a SchemaValue>);
@@ -45,12 +117,13 @@ impl SurferBuilder {
         self.home = Some(home.to_string());
     }
     /// Add a schema
-    pub fn add_schema(&mut self, name: String, schema: Schema) {
+    pub fn add_schema(&mut self, name: String, schema: SurferSchema) {
         self.schemas.insert(name, schema);
     }
     /// Add serde value panics otherwise
     pub fn add_serde(&mut self, name: String, data: &Value) {
         let schema = to_schema(data, None).unwrap();
+        let schema = SurferSchema::new(schema, false, false);
         self.schemas.insert(name, schema);
     }
     /// Add a serializable rust struct panics otherwise
@@ -344,10 +417,12 @@ pub enum Control {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::super::utils;
     use serde::{Serialize, Deserialize};
     use std::fmt::Debug;
     use std::path::Path;
     use std::fs::remove_dir_all;
+
 
 
     #[derive(Clone, Serialize, Debug, Deserialize, PartialEq)]
@@ -613,5 +688,36 @@ mod tests {
 
         assert!(path.exists());
         let _ = remove_dir_all(index_path);
+    }
+
+    #[derive(Serialize)]
+    struct Dummy {
+        x: String,
+        y: String,
+        z: u64,
+    }
+
+    #[test]
+    fn validate_surfer_schema() {
+        let data = Dummy {
+            x: "X".to_owned(),
+            y: "Y".to_owned(),
+            z: 100u64,
+        };
+
+        let data = utils::as_value(&data).unwrap();
+        let schema = utils::to_schema(&data, None).unwrap();
+        let surf_schema = SurferSchema::new(schema, false, false);
+
+        let mut computed1 = SurferBuilder::default();
+        computed1.add_schema("dummy".to_string(), surf_schema.clone());
+
+        let mut computed2 = SurferBuilder::default();
+        computed2.add_struct("dummy".to_string(), &data);
+
+        assert_eq!(computed1, computed2);
+
+        assert_eq!(format!("{:?}",computed1.schemas), format!("{:?}",computed2.schemas))
+
     }
 }
