@@ -158,6 +158,20 @@ impl Surfer {
             join(&self.home, name)
         }
     }
+    /// Access to Index
+    pub fn resolve_index(&self, name: &str) -> Option<&Index> {
+        if !self.indexes.contains_key(name) {
+            return None;
+        }
+        self.indexes.get(name)
+    }
+    /// Access to Schema
+    pub fn resolve_schema(&self, name: &str) -> Option<Schema> {
+        match self.resolve_index(name) {
+            None => None,
+            Some(index) => Some(index.schema())
+        }
+    }
     /// Inserts a struct
     pub fn insert_struct<T: Serialize>(&mut self, name: &str, data: &T) -> Result<(), IndexError> {
         let data = serde_json::to_string(data)?;
@@ -422,7 +436,6 @@ mod tests {
     use std::fmt::Debug;
     use std::path::Path;
     use std::fs::remove_dir_all;
-
 
 
     #[derive(Clone, Serialize, Debug, Deserialize, PartialEq)]
@@ -717,7 +730,6 @@ mod tests {
 
         assert_eq!(computed1, computed2);
 
-        assert_eq!(format!("{:?}",computed1.schemas), format!("{:?}",computed2.schemas))
-
+        assert_eq!(format!("{:?}", computed1.schemas), format!("{:?}", computed2.schemas))
     }
 }
