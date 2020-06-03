@@ -3,10 +3,10 @@ use std::convert::TryFrom;
 use std::ops::{Deref, DerefMut};
 use std::fmt;
 
-use tantivy::schema::{Schema, Field, TextOptions, IntOptions};
-use tantivy::{Index, IndexReader, IndexWriter, Document};
-use tantivy::query::QueryParser;
-use tantivy::collector::TopDocs;
+use tantivy::schema::{Schema, Field, TextOptions, IntOptions, IndexRecordOption};
+use tantivy::{Index, IndexReader, IndexWriter, Document, Term};
+use tantivy::query::{QueryParser, TermQuery};
+use tantivy::collector::{TopDocs};
 use tantivy::schema::Value as SchemaValue;
 
 
@@ -250,6 +250,75 @@ impl Surfer {
             });
         result
     }
+
+    pub fn read_stucts_by_field<T: Serialize + DeserializeOwned>(&mut self, name: &str, field: &str, query: &str, limit: Option<usize>, score: Option<f32>) -> Result<Option<Vec<T>>, IndexError> {
+        let index = self.indexes.get(name);
+        if index.is_none() {
+            return Ok(None);
+        };
+        let index = index.unwrap();
+        let schema = index.schema();
+        println!("Reading field...{:#?} {}", field, query);
+        let field = schema.get_field(field);
+        if field.is_none() {
+            return Ok(None);
+        };
+        let field = field.unwrap();
+        let query = TermQuery::new(
+            Term::from_field_text(field, query),
+            IndexRecordOption::Basic,
+        );
+        let limit = match limit {
+            Some(limit) => limit,
+            None => 10
+        };
+
+
+        let reader = self.readers.get(name);
+        if reader.is_none() {
+            return Ok(None);
+        };
+
+        let reader = reader.unwrap();
+        let index = self.indexes.get(name);
+        if index.is_none() {
+            return Ok(None);
+        };
+        let index = index.unwrap();
+        let reader = if reader.is_none() {
+            let reader = open_index_reader(index)?;
+            self.readers.insert(name.to_string(), Some(reader));
+            let reader = self.readers.get(name);
+            reader.unwrap().as_ref().unwrap()
+        } else {
+            let reader = self.readers.get(name);
+            reader.unwrap().as_ref().unwrap()
+        };
+
+
+        let searcher = reader.searcher();
+        let top_docs = searcher
+            .search(&query, &TopDocs::with_limit(limit))
+            .map_err(|e| {
+                let message = "Error while term query".to_string();
+                let reason = e.to_string();
+                IndexError::new(message, reason)
+            })?;
+
+
+        let mut docs = Vec::with_capacity(top_docs.len());
+        for (doc_score, doc_address) in top_docs {
+            if score.is_some() && doc_score < score.unwrap() {
+                continue;
+            }
+            let doc = searcher.doc(doc_address)?;
+            let doc = self.jsonify(name, &doc)?;
+            let doc = serde_json::from_str::<T>(&doc).unwrap();
+            docs.push(doc);
+        };
+        Ok(Some(docs))
+    }
+
     /// Reads as string
     pub fn read_string(&mut self, name: &str, query: &str, limit: Option<usize>, score: Option<f32>) -> Result<Option<Vec<String>>, IndexError> {
         let reader = self.readers.get(name);
