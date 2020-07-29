@@ -105,17 +105,61 @@ pub fn join(head: &str, tail: &str) -> Option<String> {
 }
 
 /// Maps flat JSON structures
-pub(crate) fn as_schema_builder(data: &Value, control: Option<&HashMap<String, Control>>) -> Result<SchemaBuilder, IndexError> {
-    if let Value::Map(kv) = data {
+pub(crate) fn as_schema_builder<T: Serialize>(payload: &T, control: Option<&HashMap<String, Control>>) -> Result<SchemaBuilder, IndexError> {
+    let value = as_value(payload)?;
+    let data = serde_json::to_string(payload).unwrap();
+    let kv = match &value {
+        Value::Map(kv) => kv,
+        _ => {
+            return Err(IndexError::new(
+                "Unable to create schema",
+                "Expected BTree Map", )
+            );
+        }
+    };
+    let mut names = Vec::new();
+    let keys = kv.keys();
+    for key in keys {
+        match key {
+            Value::String(k) => names.push(k.clone()),
+            _ => {
+                return Err(IndexError::new(
+                    "Unable to create schema",
+                    "keys were not string", )
+                );
+            }
+        }
+    };
+
+    let mut field_names = HashMap::new();
+    let mut indexes = Vec::new();
+
+    for name in names {
+        let lookup = format!("\"{}\":", name);
+        let index = data.find(lookup.as_str()).unwrap();
+        field_names.insert(index, name);
+        indexes.push(index);
+    };
+    indexes.sort();
+    let mut adjusted_field_names = Vec::new() ;
+
+    for index in indexes {
+        let field = field_names.get(&index).unwrap();
+        adjusted_field_names.push(field.clone())
+    }
+
+
+
+    if let Value::Map(kv) = &value {
         let mut builder = Schema::builder();
-        let keys = kv.keys();
-        for key in keys {
-            let value = kv.get(key);
+        for key in adjusted_field_names {
+            let sss = Value::String(key);
+            let value = kv.get(&sss);
             if value.is_none() {
                 continue;
             };
             let value = value.unwrap();
-            if let Value::String(k) = key {
+            if let Value::String(k) = &sss {
                 match value {
                     Value::String(_) => {
                         let options = resolve_text_option(k, control);
@@ -211,8 +255,8 @@ pub fn ls<T: AsRef<str>>(home: T) -> Result<Vec<PathBuf>, IndexError> {
 
 
 /// Convenience method to get schema
-pub(crate) fn to_schema(data: &Value, control: Option<&HashMap<String, Control>>) -> Result<Schema, IndexError> {
-    let builder = as_schema_builder(data, control)?;
+pub(crate) fn to_schema<T: Serialize>(payload: &T, control: Option<&HashMap<String, Control>>) -> Result<Schema, IndexError> {
+    let builder = as_schema_builder(payload, control)?;
     Ok(builder.build())
 }
 

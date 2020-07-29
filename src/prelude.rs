@@ -7,7 +7,6 @@ pub use crate::utils::block_thread;
 pub use crate::utils::random_string;
 pub use crate::utils::ls;
 
-pub(crate) use crate::utils::as_value;
 pub(crate) use crate::utils::to_schema;
 pub(crate) use crate::seed::open_index;
 pub(crate) use crate::seed::open_mmap_directory;

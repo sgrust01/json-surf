@@ -12,7 +12,7 @@ use tantivy::schema::Value as SchemaValue;
 
 use crate::prelude::*;
 use crate::prelude::join;
-use serde_value::Value;
+
 use serde::{Serialize};
 use serde::de::DeserializeOwned;
 
@@ -112,6 +112,10 @@ impl Default for SurferBuilder {
 
 /// Provides access to Surfer
 impl SurferBuilder {
+    /// Surfer Schema
+    pub fn resolve_schemas(&self) -> &HashMap<String, SurferSchema> {
+        &self.schemas
+    }
     /// Set home location - default is indexes
     pub fn set_home(&mut self, home: &str) {
         self.home = Some(home.to_string());
@@ -121,15 +125,14 @@ impl SurferBuilder {
         self.schemas.insert(name, schema);
     }
     /// Add serde value panics otherwise
-    pub fn add_serde(&mut self, name: String, data: &Value) {
+    fn add_serde<T: Serialize>(&mut self, name: String, data: &T) {
         let schema = to_schema(data, None).unwrap();
         let schema = SurferSchema::new(schema, false, false);
         self.schemas.insert(name, schema);
     }
     /// Add a serializable rust struct panics otherwise
     pub fn add_struct<T: Serialize>(&mut self, name: String, data: &T) {
-        let value = as_value(data).unwrap();
-        self.add_serde(name, &value);
+        self.add_serde::<T>(name, data);
     }
 }
 
@@ -140,9 +143,14 @@ pub struct Surfer {
     fields: HashMap<String, Vec<Field>>,
     readers: HashMap<String, Option<IndexReader>>,
     writers: HashMap<String, Option<IndexWriter>>,
+    schemas: HashMap<String, SurferSchema>,
 }
 
 impl Surfer {
+    /// Access to Surfer Schema
+    pub fn resolve_schema(&self, name: &str) -> Option<&SurferSchema> {
+        self.schemas.get(name)
+    }
     /// Location of home
     pub fn home(&self) -> &String {
         &self.home
@@ -164,13 +172,6 @@ impl Surfer {
             return None;
         }
         self.indexes.get(name)
-    }
-    /// Access to Schema
-    pub fn resolve_schema(&self, name: &str) -> Option<Schema> {
-        match self.resolve_index(name) {
-            None => None,
-            Some(index) => Some(index.schema())
-        }
     }
     /// Inserts a struct
     pub fn insert_struct<T: Serialize>(&mut self, name: &str, data: &T) -> Result<(), IndexError> {
@@ -250,15 +251,38 @@ impl Surfer {
             });
         result
     }
+    fn _is_index_valid(&self, name: &str) -> bool {
+        let index = self.indexes.get(name);
+        if index.is_some() {
+            true
+        } else {
+            false
+        }
+    }
+
+    fn _prepare_index_reader(&mut self, name: &str) -> Result<(), IndexError> {
+        let valid = self._is_index_valid(name);
+        if !valid {
+            let message = format!("Unable to prepare the reader");
+            let reason = format!("Index was missing: {} ", name);
+            return Err(IndexError::new(message, reason));
+        };
+        let index = self.indexes.get(name).unwrap();
+        let reader = open_index_reader(index)?;
+        let _ = self.readers.insert(name.to_string(), Some(reader));
+        Ok(())
+    }
 
     pub fn read_stucts_by_field<T: Serialize + DeserializeOwned>(&mut self, name: &str, field: &str, query: &str, limit: Option<usize>, score: Option<f32>) -> Result<Option<Vec<T>>, IndexError> {
-        let index = self.indexes.get(name);
-        if index.is_none() {
-            return Ok(None);
-        };
-        let index = index.unwrap();
+        {
+            let result = self._prepare_index_reader(name);
+            if result.is_err() {
+                return Ok(None);
+            };
+        }
+        let index = self.indexes.get(name).unwrap();
+        let reader = self.readers.get(name).unwrap().as_ref().unwrap();
         let schema = index.schema();
-        println!("Reading field...{:#?} {}", field, query);
         let field = schema.get_field(field);
         if field.is_none() {
             return Ok(None);
@@ -272,30 +296,6 @@ impl Surfer {
             Some(limit) => limit,
             None => 10
         };
-
-
-        let reader = self.readers.get(name);
-        if reader.is_none() {
-            return Ok(None);
-        };
-
-        let reader = reader.unwrap();
-        let index = self.indexes.get(name);
-        if index.is_none() {
-            return Ok(None);
-        };
-        let index = index.unwrap();
-        let reader = if reader.is_none() {
-            let reader = open_index_reader(index)?;
-            self.readers.insert(name.to_string(), Some(reader));
-            let reader = self.readers.get(name);
-            reader.unwrap().as_ref().unwrap()
-        } else {
-            let reader = self.readers.get(name);
-            reader.unwrap().as_ref().unwrap()
-        };
-
-
         let searcher = reader.searcher();
         let top_docs = searcher
             .search(&query, &TopDocs::with_limit(limit))
@@ -321,26 +321,14 @@ impl Surfer {
 
     /// Reads as string
     pub fn read_string(&mut self, name: &str, query: &str, limit: Option<usize>, score: Option<f32>) -> Result<Option<Vec<String>>, IndexError> {
-        let reader = self.readers.get(name);
-        if reader.is_none() {
-            return Ok(None);
-        };
-
-        let reader = reader.unwrap();
-        let index = self.indexes.get(name);
-        if index.is_none() {
-            return Ok(None);
-        };
-        let index = index.unwrap();
-        let reader = if reader.is_none() {
-            let reader = open_index_reader(index)?;
-            self.readers.insert(name.to_string(), Some(reader));
-            let reader = self.readers.get(name);
-            reader.unwrap().as_ref().unwrap()
-        } else {
-            let reader = self.readers.get(name);
-            reader.unwrap().as_ref().unwrap()
-        };
+        {
+            let result = self._prepare_index_reader(name);
+            if result.is_err() {
+                return Ok(None);
+            };
+        }
+        let index = self.indexes.get(name).unwrap();
+        let reader = self.readers.get(name).unwrap().as_ref().unwrap();
 
         let default_fields = self.fields.get(name).unwrap().clone();
         let searcher = reader.searcher();
@@ -367,26 +355,14 @@ impl Surfer {
     }
     /// Reads as struct
     pub fn read_structs<T: Serialize + DeserializeOwned>(&mut self, name: &str, query: &str, limit: Option<usize>, score: Option<f32>) -> Result<Option<Vec<T>>, IndexError> {
-        let reader = self.readers.get(name);
-        if reader.is_none() {
-            return Ok(None);
-        };
-
-        let reader = reader.unwrap();
-        let index = self.indexes.get(name);
-        if index.is_none() {
-            return Ok(None);
-        };
-        let index = index.unwrap();
-        let reader = if reader.is_none() {
-            let reader = open_index_reader(index)?;
-            self.readers.insert(name.to_string(), Some(reader));
-            let reader = self.readers.get(name);
-            reader.unwrap().as_ref().unwrap()
-        } else {
-            let reader = self.readers.get(name);
-            reader.unwrap().as_ref().unwrap()
-        };
+        {
+            let result = self._prepare_index_reader(name);
+            if result.is_err() {
+                return Ok(None);
+            };
+        }
+        let index = self.indexes.get(name).unwrap();
+        let reader = self.readers.get(name).unwrap().as_ref().unwrap();
 
         let default_fields = self.fields.get(name).unwrap().clone();
         let searcher = reader.searcher();
@@ -478,14 +454,15 @@ impl TryFrom<SurferBuilder> for Surfer {
             let writer: Option<IndexWriter> = None;
             writers.insert(name.to_string(), writer);
             readers.insert(name.to_string(), reader);
-        }
-
+        };
+        let schemas = builder.resolve_schemas().clone();
         Ok(Surfer {
             home,
             indexes,
             fields,
             readers,
             writers,
+            schemas,
         })
     }
 }
@@ -680,8 +657,7 @@ mod tests {
         let path = Path::new(path_to_index);
         assert!(!path.exists());
         let oldman = OldMan::default();
-        let data = as_value(&oldman).unwrap();
-        let schema = to_schema(&data, None).unwrap();
+        let schema = to_schema(&oldman, None).unwrap();
         let _ = initialize_mmap(index_name, home, &schema);
         assert!(path.exists());
         let _ = std::fs::remove_dir_all(path_to_index);

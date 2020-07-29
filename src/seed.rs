@@ -95,6 +95,7 @@ mod tests {
     use std::fs::remove_dir_all;
     use super::super::utils;
     use serde::Serialize;
+    use crate::utils::as_value;
 
     #[derive(Serialize)]
     struct Dummy {
