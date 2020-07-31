@@ -54,3 +54,7 @@ path="examples/05_fuzzy_search.rs"
 [[example]]
 name="fuzzyname"
 path="examples/06_fuzzy_user_name.rs"
+
+[[example]]
+name="termsearch"
+path="examples/07_term_search.rs"
