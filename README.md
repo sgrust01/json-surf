@@ -20,6 +20,7 @@
 * Easy write and read API
 * Write multiple documents together
 * Support fuzzy word search (see examples)
+* Support Term query
 * Requires no runtime
 * No unsafe block
 * Run on rust stable
