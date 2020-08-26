@@ -25,49 +25,6 @@ pub enum SurferFieldTypes {
     Bytes,
 }
 
-// impl TryFrom<(Field, &str, SurferFieldTypes)> for Term {
-//     type Error = IndexError;
-//
-//     fn try_from((field, field_value, field_type): (Field, &str, SurferFieldTypes)) -> Result<Self, Self::Error> {
-//         let term = match field_type {
-//             SurferFieldTypes::U64 => {
-//                 let field_value = field_value.parse::<u64>().map_err(|e| {
-//                     let message = format!("Invalid search: {}", query);
-//                     let reason = e.to_string();
-//                     IndexError::new(message, reason)
-//                 })?;
-//                 Term::from_field_u64(field, field_value)
-//             }
-//             SurferFieldTypes::I64 => {
-//                 let field_value = field_value.parse::<i64>().map_err(|e| {
-//                     let message = format!("Invalid search: {}", query);
-//                     let reason = e.to_string();
-//                     IndexError::new(message, reason)
-//                 })?;
-//                 Term::from_field_i64(field, field_value)
-//             }
-//             SurferFieldTypes::F64 => {
-//                 let field_value = field_value.parse::<f64>().map_err(|e| {
-//                     let message = format!("Invalid search: {}", query);
-//                     let reason = e.to_string();
-//                     IndexError::new(message, reason)
-//                 })?;
-//                 Term::from_field_f64(field, field_value)
-//             }
-//             SurferFieldTypes::String => {
-//                 Term::from_field_text(field, field_value)
-//             }
-//             SurferFieldTypes::Bytes => {
-//                 let message = format!("Invalid search: {}", query);
-//                 let reason = "Cant search on bytes".to_string();
-//                 IndexError::new(message, reason)
-//             }
-//         };
-//     }
-//     Ok(term)
-// }
-
-
 #[derive(Clone, Eq, PartialEq)]
 pub struct SurferSchema {
     schema: Schema,
