@@ -271,7 +271,7 @@ mod tests {
 
         let data = utils::as_value(&data).unwrap();
 
-        let computed = utils::to_schema(&data, None).unwrap();
+        let (computed, _) = utils::to_schema(&data, None).unwrap();
         let computed = SchemaTest::new(computed);
 
         let mut expected = Schema::builder();
@@ -320,7 +320,7 @@ mod tests {
             m,
         };
         let data = utils::as_value(&data).unwrap();
-        let computed = utils::to_schema(&data, None).unwrap();
+        let (computed, _) = utils::to_schema(&data, None).unwrap();
         let computed = SchemaTest::new(computed);
 
         let mut expected = Schema::builder();

@@ -140,7 +140,7 @@ mod tests {
             z: 100,
         };
         let data = utils::as_value(&data).unwrap();
-        let schema = utils::to_schema(&data, None).unwrap();
+        let (schema, _) = utils::to_schema(&data, None).unwrap();
         let path = random_string(Some(10));
         let p = Path::new(&path);
         assert!(!p.exists());
@@ -183,7 +183,7 @@ mod tests {
 
         let dummy = Dummy::default();
         let data = as_value(&dummy).unwrap();
-        let schema = to_schema(&data, None).unwrap();
+        let (schema, _) = to_schema(&data, None).unwrap();
         let index = open_index(dir, Some(&schema)).unwrap();
 
         let _ = std::fs::remove_dir_all(path);
@@ -207,7 +207,7 @@ mod tests {
 
         let dummy = Dummy::default();
         let data = as_value(&dummy).unwrap();
-        let schema = to_schema(&data, None).unwrap();
+        let (schema, _) = to_schema(&data, None).unwrap();
         let index = open_index(dir, Some(&schema)).unwrap();
 
         let _ = std::fs::remove_dir_all(path);

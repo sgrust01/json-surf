@@ -17,16 +17,28 @@ use serde::{Serialize};
 use serde::de::DeserializeOwned;
 
 #[derive(Clone, Eq, PartialEq)]
+pub enum SurferFieldTypes {
+    U64,
+    I64,
+    F64,
+    String,
+    Bytes,
+}
+
+
+#[derive(Clone, Eq, PartialEq)]
 pub struct SurferSchema {
     schema: Schema,
+    mappings: HashMap<String, SurferFieldTypes>,
     track_tf: bool,
     track_tf_idf: bool,
 }
 
 impl SurferSchema {
-    pub fn new(schema: Schema, track_tf: bool, track_tf_idf: bool) -> Self {
+    pub fn new(schema: Schema, mappings: HashMap<String, SurferFieldTypes>, track_tf: bool, track_tf_idf: bool) -> Self {
         Self {
             schema,
+            mappings,
             track_tf,
             track_tf_idf,
         }
@@ -126,8 +138,8 @@ impl SurferBuilder {
     }
     /// Add serde value panics otherwise
     fn add_serde<T: Serialize>(&mut self, name: String, data: &T) {
-        let schema = to_schema(data, None).unwrap();
-        let schema = SurferSchema::new(schema, false, false);
+        let (schema, mappings) = to_schema(data, None).unwrap();
+        let schema = SurferSchema::new(schema, mappings, false, false);
         self.schemas.insert(name, schema);
     }
     /// Add a serializable rust struct panics otherwise
@@ -288,6 +300,7 @@ impl Surfer {
             return Ok(None);
         };
         let field = field.unwrap();
+
         let query = TermQuery::new(
             Term::from_field_text(field, query),
             IndexRecordOption::Basic,
@@ -657,7 +670,8 @@ mod tests {
         let path = Path::new(path_to_index);
         assert!(!path.exists());
         let oldman = OldMan::default();
-        let schema = to_schema(&oldman, None).unwrap();
+        let (schema, mappings) = to_schema(&oldman, None).unwrap();
+        let schema = SurferSchema::new(schema, mappings, false, false);
         let _ = initialize_mmap(index_name, home, &schema);
         assert!(path.exists());
         let _ = std::fs::remove_dir_all(path_to_index);
@@ -764,8 +778,8 @@ mod tests {
         };
 
         let data = utils::as_value(&data).unwrap();
-        let schema = utils::to_schema(&data, None).unwrap();
-        let surf_schema = SurferSchema::new(schema, false, false);
+        let (schema, mappings) = utils::to_schema(&data, None).unwrap();
+        let surf_schema = SurferSchema::new(schema, mappings, false, false);
 
         let mut computed1 = SurferBuilder::default();
         computed1.add_schema("dummy".to_string(), surf_schema.clone());
