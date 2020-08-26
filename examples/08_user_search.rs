@@ -92,20 +92,30 @@ fn main() {
     println!("---------------------------");
 
 
+    println!("===========================");
+    println!("Search users with Age = 20");
+    println!("---------------------------");
     let query = "20";
     let mut computed = surfer.read_stucts_by_field::<UserInfo>(&name, "age", query, Some(100), None).unwrap().unwrap();
     computed.sort();
     let mut expected = vec![john_doe];
     expected.sort();
     assert_eq!(computed, expected);
+    println!("{:#?}", computed);
+    println!("---------------------------");
 
+
+    println!("===========================");
+    println!("Search users with Age = 18");
+    println!("---------------------------");
     let query = "18";
     let mut computed = surfer.read_stucts_by_field::<UserInfo>(&name, "age", query, Some(100), None).unwrap().unwrap();
     computed.sort();
     let mut expected = vec![jane_doe];
     expected.sort();
     assert_eq!(computed, expected);
-
+    println!("{:#?}", computed);
+    println!("---------------------------");
 
     // Clean-up
     let path = surfer.which_index(&name).unwrap();

@@ -25,6 +25,48 @@ pub enum SurferFieldTypes {
     Bytes,
 }
 
+// impl TryFrom<(Field, &str, SurferFieldTypes)> for Term {
+//     type Error = IndexError;
+//
+//     fn try_from((field, field_value, field_type): (Field, &str, SurferFieldTypes)) -> Result<Self, Self::Error> {
+//         let term = match field_type {
+//             SurferFieldTypes::U64 => {
+//                 let field_value = field_value.parse::<u64>().map_err(|e| {
+//                     let message = format!("Invalid search: {}", query);
+//                     let reason = e.to_string();
+//                     IndexError::new(message, reason)
+//                 })?;
+//                 Term::from_field_u64(field, field_value)
+//             }
+//             SurferFieldTypes::I64 => {
+//                 let field_value = field_value.parse::<i64>().map_err(|e| {
+//                     let message = format!("Invalid search: {}", query);
+//                     let reason = e.to_string();
+//                     IndexError::new(message, reason)
+//                 })?;
+//                 Term::from_field_i64(field, field_value)
+//             }
+//             SurferFieldTypes::F64 => {
+//                 let field_value = field_value.parse::<f64>().map_err(|e| {
+//                     let message = format!("Invalid search: {}", query);
+//                     let reason = e.to_string();
+//                     IndexError::new(message, reason)
+//                 })?;
+//                 Term::from_field_f64(field, field_value)
+//             }
+//             SurferFieldTypes::String => {
+//                 Term::from_field_text(field, field_value)
+//             }
+//             SurferFieldTypes::Bytes => {
+//                 let message = format!("Invalid search: {}", query);
+//                 let reason = "Cant search on bytes".to_string();
+//                 IndexError::new(message, reason)
+//             }
+//         };
+//     }
+//     Ok(term)
+// }
+
 
 #[derive(Clone, Eq, PartialEq)]
 pub struct SurferSchema {
@@ -42,6 +84,9 @@ impl SurferSchema {
             track_tf,
             track_tf_idf,
         }
+    }
+    pub fn resolve_mapping(&self) -> &HashMap<String, SurferFieldTypes> {
+        &self.mappings
     }
 }
 
@@ -285,24 +330,71 @@ impl Surfer {
         Ok(())
     }
 
-    pub fn read_stucts_by_field<T: Serialize + DeserializeOwned>(&mut self, name: &str, field: &str, query: &str, limit: Option<usize>, score: Option<f32>) -> Result<Option<Vec<T>>, IndexError> {
+    pub fn read_stucts_by_field<T: Serialize + DeserializeOwned>(&mut self, index_name: &str, field_name: &str, query: &str, limit: Option<usize>, score: Option<f32>) -> Result<Option<Vec<T>>, IndexError> {
         {
-            let result = self._prepare_index_reader(name);
+            let result = self._prepare_index_reader(index_name);
             if result.is_err() {
                 return Ok(None);
             };
         }
-        let index = self.indexes.get(name).unwrap();
-        let reader = self.readers.get(name).unwrap().as_ref().unwrap();
-        let schema = index.schema();
-        let field = schema.get_field(field);
+        let reader = self.readers.get(index_name).unwrap().as_ref().unwrap();
+        let schema = self.schemas.get(index_name);
+        if schema.is_none() {
+            return Ok(None);
+        }
+        let schema = schema.unwrap();
+        let mappings = schema.resolve_mapping();
+
+        let field_type = mappings.get(field_name);
+        if field_type.is_none() {
+            return Ok(None);
+        };
+        let field_type = field_type.unwrap();
+
+        let field = schema.get_field(field_name);
         if field.is_none() {
             return Ok(None);
         };
         let field = field.unwrap();
 
+       let term = match field_type {
+            SurferFieldTypes::U64 => {
+                let field_value = query.parse::<u64>().map_err(|e| {
+                    let message = format!("Invalid search: {}", query);
+                    let reason = e.to_string();
+                    IndexError::new(message, reason)
+                })?;
+                Term::from_field_u64(field, field_value)
+            }
+            SurferFieldTypes::I64 => {
+                let field_value = query.parse::<i64>().map_err(|e| {
+                    let message = format!("Invalid search: {}", query);
+                    let reason = e.to_string();
+                    IndexError::new(message, reason)
+                })?;
+                Term::from_field_i64(field, field_value)
+            }
+            SurferFieldTypes::F64 => {
+                let field_value = query.parse::<f64>().map_err(|e| {
+                    let message = format!("Invalid search: {}", query);
+                    let reason = e.to_string();
+                    IndexError::new(message, reason)
+                })?;
+                Term::from_field_f64(field, field_value)
+            }
+            SurferFieldTypes::String => {
+                Term::from_field_text(field, query)
+            }
+            SurferFieldTypes::Bytes => {
+                let message = format!("Invalid search: {}", query);
+                let reason = "Cant search on bytes".to_string();
+                return Err(IndexError::new(message, reason));
+            }
+        };
+
+
         let query = TermQuery::new(
-            Term::from_field_text(field, query),
+            term,
             IndexRecordOption::Basic,
         );
         let limit = match limit {
@@ -325,7 +417,7 @@ impl Surfer {
                 continue;
             }
             let doc = searcher.doc(doc_address)?;
-            let doc = self.jsonify(name, &doc)?;
+            let doc = self.jsonify(index_name, &doc)?;
             let doc = serde_json::from_str::<T>(&doc).unwrap();
             docs.push(doc);
         };
