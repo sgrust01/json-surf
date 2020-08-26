@@ -36,8 +36,8 @@ name="helloworld"
 path="examples/01_helloworld.rs"
 
 [[example]]
-name="username"
-path="examples/02_user_name.rs"
+name="tantivy"
+path= "examples/02_example_from_tantivy.rs"
 
 [[example]]
 name="userdata"
@@ -47,14 +47,7 @@ path="examples/03_user_data.rs"
 name="binarydata"
 path="examples/04_binary_data.rs"
 
-[[example]]
-name="fuzzysearch"
-path="examples/05_fuzzy_search.rs"
 
 [[example]]
 name="fuzzyname"
-path="examples/06_fuzzy_user_name.rs"
-
-[[example]]
-name="termsearch"
-path="examples/07_term_search.rs"
+path= "examples/05_fuzzy_user_name.rs"

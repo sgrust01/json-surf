@@ -287,6 +287,7 @@ impl Surfer {
         Ok(())
     }
 
+    /// Uses term search
     pub fn read_stucts_by_field<T: Serialize + DeserializeOwned>(&mut self, index_name: &str, field_name: &str, query: &str, limit: Option<usize>, score: Option<f32>) -> Result<Option<Vec<T>>, IndexError> {
         {
             let result = self._prepare_index_reader(index_name);
