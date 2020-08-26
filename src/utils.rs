@@ -13,6 +13,7 @@ use serde_value::Value;
 use tantivy::schema::{Schema, TextOptions, TEXT, IntOptions, STORED, SchemaBuilder};
 
 use crate::prelude::*;
+use crate::registry::SurferFieldTypes;
 
 /// Convert a JSON serializable struct as JSON
 pub(crate) fn as_value<T>(data: &T) -> Result<Value, IndexError>
@@ -105,7 +106,7 @@ pub fn join(head: &str, tail: &str) -> Option<String> {
 }
 
 /// Maps flat JSON structures
-pub(crate) fn as_schema_builder<T: Serialize>(payload: &T, control: Option<&HashMap<String, Control>>) -> Result<SchemaBuilder, IndexError> {
+pub(crate) fn as_schema_builder<T: Serialize>(payload: &T, control: Option<&HashMap<String, Control>>) -> Result<(SchemaBuilder, HashMap<String, SurferFieldTypes>), IndexError> {
     let value = as_value(payload)?;
     let data = serde_json::to_string(payload).unwrap();
     let kv = match &value {
@@ -133,6 +134,7 @@ pub(crate) fn as_schema_builder<T: Serialize>(payload: &T, control: Option<&Hash
 
     let mut field_names = HashMap::new();
     let mut indexes = Vec::new();
+    let mut field_type_mappings = HashMap::<String, SurferFieldTypes>::new();
 
     for name in names {
         let lookup = format!("\"{}\":", name);
@@ -141,13 +143,12 @@ pub(crate) fn as_schema_builder<T: Serialize>(payload: &T, control: Option<&Hash
         indexes.push(index);
     };
     indexes.sort();
-    let mut adjusted_field_names = Vec::new() ;
+    let mut adjusted_field_names = Vec::new();
 
     for index in indexes {
         let field = field_names.get(&index).unwrap();
         adjusted_field_names.push(field.clone())
     }
-
 
 
     if let Value::Map(kv) = &value {
@@ -164,53 +165,66 @@ pub(crate) fn as_schema_builder<T: Serialize>(payload: &T, control: Option<&Hash
                     Value::String(_) => {
                         let options = resolve_text_option(k, control);
                         builder.add_text_field(k, options);
+                        field_type_mappings.insert(k.to_string(), SurferFieldTypes::String);
                     }
                     Value::Bool(_) => {
                         let options = resolve_text_option(k, control);
                         builder.add_text_field(k, options);
+                        field_type_mappings.insert(k.to_string(), SurferFieldTypes::String);
                     }
                     Value::U64(_) => {
                         let options = resolve_number_option(k, control);
                         builder.add_u64_field(k, options);
+                        field_type_mappings.insert(k.to_string(), SurferFieldTypes::U64);
                     }
                     Value::U32(_) => {
                         let options = resolve_number_option(k, control);
                         builder.add_u64_field(k, options);
+                        field_type_mappings.insert(k.to_string(), SurferFieldTypes::U64);
                     }
                     Value::U16(_) => {
                         let options = resolve_number_option(k, control);
                         builder.add_u64_field(k, options);
+                        field_type_mappings.insert(k.to_string(), SurferFieldTypes::U64);
                     }
                     Value::U8(_) => {
                         let options = resolve_number_option(k, control);
                         builder.add_u64_field(k, options);
+                        field_type_mappings.insert(k.to_string(), SurferFieldTypes::U64);
                     }
                     Value::I64(_) => {
                         let options = resolve_number_option(k, control);
                         builder.add_i64_field(k, options);
+                        field_type_mappings.insert(k.to_string(), SurferFieldTypes::I64);
                     }
                     Value::I32(_) => {
                         let options = resolve_number_option(k, control);
                         builder.add_i64_field(k, options);
+                        field_type_mappings.insert(k.to_string(), SurferFieldTypes::I64);
                     }
                     Value::I16(_) => {
                         let options = resolve_number_option(k, control);
                         builder.add_i64_field(k, options);
+                        field_type_mappings.insert(k.to_string(), SurferFieldTypes::I64);
                     }
                     Value::I8(_) => {
                         let options = resolve_number_option(k, control);
                         builder.add_i64_field(k, options);
+                        field_type_mappings.insert(k.to_string(), SurferFieldTypes::I64);
                     }
                     Value::F64(_) => {
                         let options = resolve_number_option(k, control);
                         builder.add_f64_field(k, options);
+                        field_type_mappings.insert(k.to_string(), SurferFieldTypes::F64);
                     }
                     Value::F32(_) => {
                         let options = resolve_number_option(k, control);
                         builder.add_f64_field(k, options);
+                        field_type_mappings.insert(k.to_string(), SurferFieldTypes::F64);
                     }
                     Value::Seq(_) => {
                         builder.add_bytes_field(k);
+                        field_type_mappings.insert(k.to_string(), SurferFieldTypes::Bytes);
                     }
                     _ => {
                         return Err(IndexError::new(
@@ -232,7 +246,7 @@ pub(crate) fn as_schema_builder<T: Serialize>(payload: &T, control: Option<&Hash
         //     "Empty json", )
         // );
 
-        return Ok(builder);
+        return Ok((builder, field_type_mappings));
     };
     let error = IndexError::new(
         "Unable to create schema",
@@ -255,9 +269,9 @@ pub fn ls<T: AsRef<str>>(home: T) -> Result<Vec<PathBuf>, IndexError> {
 
 
 /// Convenience method to get schema
-pub(crate) fn to_schema<T: Serialize>(payload: &T, control: Option<&HashMap<String, Control>>) -> Result<Schema, IndexError> {
-    let builder = as_schema_builder(payload, control)?;
-    Ok(builder.build())
+pub(crate) fn to_schema<T: Serialize>(payload: &T, control: Option<&HashMap<String, Control>>) -> Result<(Schema, HashMap<String, SurferFieldTypes>), IndexError> {
+    let (builder, mappings) = as_schema_builder(payload, control)?;
+    Ok((builder.build(), mappings))
 }
 
 /// block thread
@@ -414,7 +428,7 @@ mod tests {
         };
         let result = as_value(&data);
         let data = result.unwrap();
-        let schema = to_schema(&data, None).unwrap();
+        let (schema, _) = to_schema(&data, None).unwrap();
         let data = serde_json::to_string(&data).unwrap();
         let document = schema.parse_document(&data);
         assert!(document.is_err())
