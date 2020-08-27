@@ -53,14 +53,9 @@ impl Ord for User {
     }
 }
 
-fn home_and_random_index_name() -> (String, String) {
-    let home = ".store/examples".to_string();
-    let name = random_string(None);
-    (home, name)
-}
-
 fn main() {
-    let (home, name) = home_and_random_index_name();
+    let home = ".store".to_string();
+    let name = "fuzzy".to_string();
 
     let mut builder = SurferBuilder::default();
     builder.set_home(&home);
@@ -123,4 +118,5 @@ fn main() {
     // Clean-up
     let path = surfer.which_index(&name).unwrap();
     let _ = remove_dir_all(&path);
+    let _ = remove_dir_all(&home);
 }
