@@ -118,13 +118,13 @@ impl Ord for UserInfo {
             return Ordering::Equal;
         };
         if self.first == other.first {
-            if self.last > self.last {
+            if self.last > other.last {
                 Ordering::Greater
             } else {
                 Ordering::Less
             }
         } else {
-            if self.first > self.first {
+            if self.first > other.first {
                 Ordering::Greater
             } else {
                 Ordering::Less

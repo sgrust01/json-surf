@@ -29,29 +29,6 @@ impl Default for User {
     }
 }
 
-impl Eq for User {}
-
-
-impl Ord for User {
-    fn cmp(&self, other: &Self) -> Ordering {
-        if self.first == other.first && self.last == other.last {
-            return Ordering::Equal;
-        };
-        if self.first == other.first {
-            if self.last > self.last {
-                Ordering::Greater
-            } else {
-                Ordering::Less
-            }
-        } else {
-            if self.first > self.first {
-                Ordering::Greater
-            } else {
-                Ordering::Less
-            }
-        }
-    }
-}
 
 fn main() {
     let home = ".store".to_string();
@@ -80,7 +57,6 @@ fn main() {
     println!("---------------------------");
     println!("{:#?}", users);
     println!("---------------------------");
-
 
 
     let query = "deo";
@@ -119,4 +95,28 @@ fn main() {
     let path = surfer.which_index(&name).unwrap();
     let _ = remove_dir_all(&path);
     let _ = remove_dir_all(&home);
+}
+
+impl Eq for User {}
+
+
+impl Ord for User {
+    fn cmp(&self, other: &Self) -> Ordering {
+        if self.first == other.first && self.last == other.last {
+            return Ordering::Equal;
+        };
+        if self.first == other.first {
+            if self.last > other.last {
+                Ordering::Greater
+            } else {
+                Ordering::Less
+            }
+        } else {
+            if self.first > other.first {
+                Ordering::Greater
+            } else {
+                Ordering::Less
+            }
+        }
+    }
 }
