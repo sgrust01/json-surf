@@ -30,15 +30,9 @@ impl Default for OldMan {
     }
 }
 
-/// Convenience method to keep indexes tucked under a directory
-fn home_and_random_index_name() -> (String, String) {
-    let home = ".store/examples".to_string();
-    let name = random_string(None);
-    (home, name)
-}
-
 fn main() {
-    let (home, name) = home_and_random_index_name();
+    let home = ".store".to_string();
+    let name = "tantivy".to_string();
 
     // Mostly empty but can be a real flat struct
     let data = OldMan::default();
@@ -115,4 +109,5 @@ fn main() {
     // Clean-up
     let path = surfer.which_index(&name).unwrap();
     let _ = remove_dir_all(&path);
+    let _ = remove_dir_all(&home);
 }

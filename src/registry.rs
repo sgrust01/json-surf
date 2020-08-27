@@ -212,21 +212,16 @@ impl Surfer {
     }
     /// Inserts a structs
     pub fn insert_structs<T: Serialize>(&mut self, name: &str, payload: &Vec<T>) -> Result<(), IndexError> {
-        let writer = self.writers.get(name);
-        if writer.is_none() {
-            return Ok(());
-        };
+        {
+            let result = self._prepare_index_writer(name);
+            if result.is_err() {
+                return Ok(());
+            };
+        }
+        let writer = self.writers.get_mut(name).unwrap().as_mut().unwrap();
 
         let index = self.indexes.get(name).unwrap();
         let schema = &index.schema();
-
-        let writer = writer.unwrap();
-        if writer.is_none() {
-            let writer = open_index_writer(index)?;
-            self.writers.insert(name.to_string(), Some(writer));
-        };
-
-        let writer = self.writers.get_mut(name).unwrap().as_mut().unwrap();
         for data in payload {
             let data = serde_json::to_string(data)?;
             let document = schema.parse_document(&data)?;
@@ -273,6 +268,29 @@ impl Surfer {
             false
         }
     }
+    fn _prepare_index_writer(&mut self, index_name: &str) -> Result<(), IndexError> {
+        let valid = self._is_index_valid(index_name);
+        if !valid {
+            let message = format!("Unable to prepare the reader");
+            let reason = format!("Index was missing: {} ", index_name);
+            return Err(IndexError::new(message, reason));
+        };
+        let index = self.indexes.get(index_name).unwrap();
+        let writer = self.writers.get(index_name);
+        if writer.is_none() {
+            let message = format!("Unable to prepare the writer");
+            let reason = format!("Reader was missing: {} ", index_name);
+            return Err(IndexError::new(message, reason));
+        };
+        let writer = writer.unwrap();
+        if writer.is_some() {
+            return Ok(());
+        };
+
+        let writer = open_index_writer(index)?;
+        let _ = self.writers.insert(index_name.to_string(), Some(writer));
+        Ok(())
+    }
 
     fn _prepare_index_reader(&mut self, name: &str) -> Result<(), IndexError> {
         let valid = self._is_index_valid(name);
@@ -282,13 +300,81 @@ impl Surfer {
             return Err(IndexError::new(message, reason));
         };
         let index = self.indexes.get(name).unwrap();
+        let reader = self.readers.get(name);
+        if reader.is_none() {
+            let message = format!("Unable to prepare the reader");
+            let reason = format!("Reader was missing: {} ", name);
+            return Err(IndexError::new(message, reason));
+        };
+        let reader = reader.unwrap();
+        if reader.is_some() {
+            return Ok(());
+        };
+
         let reader = open_index_reader(index)?;
         let _ = self.readers.insert(name.to_string(), Some(reader));
         Ok(())
     }
 
+    fn build_term(&self, schema: &SurferSchema, field_name: &str, field_value: &str) -> Result<Term, IndexError> {
+        let mappings = schema.resolve_mapping();
+
+        let field_type = mappings.get(field_name);
+        if field_type.is_none() {
+            let message = format!("Unable to perform search");
+            let reason = format!("Missing field: {}", field_name);
+            return Err(IndexError::new(message, reason));
+        };
+        let field_type = field_type.unwrap();
+
+        let field = schema.get_field(field_name);
+        if field.is_none() {
+            let message = format!("Unable to perform search");
+            let reason = format!("Missing field: {}", field_name);
+            return Err(IndexError::new(message, reason));
+        };
+        let field = field.unwrap();
+
+        let term = match field_type {
+            SurferFieldTypes::U64 => {
+                let field_value = field_value.parse::<u64>().map_err(|e| {
+                    let message = format!("Invalid search: {}", field_value);
+                    let reason = e.to_string();
+                    IndexError::new(message, reason)
+                })?;
+                Term::from_field_u64(field, field_value)
+            }
+            SurferFieldTypes::I64 => {
+                let field_value = field_value.parse::<i64>().map_err(|e| {
+                    let message = format!("Invalid search: {}", field_value);
+                    let reason = e.to_string();
+                    IndexError::new(message, reason)
+                })?;
+                Term::from_field_i64(field, field_value)
+            }
+            SurferFieldTypes::F64 => {
+                let field_value = field_value.parse::<f64>().map_err(|e| {
+                    let message = format!("Invalid search: {}", field_value);
+                    let reason = e.to_string();
+                    IndexError::new(message, reason)
+                })?;
+                Term::from_field_f64(field, field_value)
+            }
+            SurferFieldTypes::String => {
+                Term::from_field_text(field, field_value)
+            }
+            SurferFieldTypes::Bytes => {
+                let message = format!("Invalid search: {}", field_value);
+                let reason = "Cant search on bytes".to_string();
+                return Err(IndexError::new(message, reason));
+            }
+        };
+
+        Ok(term)
+    }
+
     /// Uses term search
-    pub fn read_stucts_by_field<T: Serialize + DeserializeOwned>(&mut self, index_name: &str, field_name: &str, query: &str, limit: Option<usize>, score: Option<f32>) -> Result<Option<Vec<T>>, IndexError> {
+    pub fn read_stucts_by_field<T: Serialize + DeserializeOwned>(&mut self, index_name: &str, field_name: &str, field_value: &str, limit: Option<usize>, score: Option<f32>) -> Result<Option<Vec<T>>, IndexError> {
         {
             let result = self._prepare_index_reader(index_name);
             if result.is_err() {
@@ -296,60 +382,14 @@ impl Surfer {
             };
         }
         let reader = self.readers.get(index_name).unwrap().as_ref().unwrap();
+
         let schema = self.schemas.get(index_name);
         if schema.is_none() {
             return Ok(None);
         }
         let schema = schema.unwrap();
-        let mappings = schema.resolve_mapping();
 
-        let field_type = mappings.get(field_name);
-        if field_type.is_none() {
-            return Ok(None);
-        };
-        let field_type = field_type.unwrap();
-
-        let field = schema.get_field(field_name);
-        if field.is_none() {
-            return Ok(None);
-        };
-        let field = field.unwrap();
-
-       let term = match field_type {
-            SurferFieldTypes::U64 => {
-                let field_value = query.parse::<u64>().map_err(|e| {
-                    let message = format!("Invalid search: {}", query);
-                    let reason = e.to_string();
-                    IndexError::new(message, reason)
-                })?;
-                Term::from_field_u64(field, field_value)
-            }
-            SurferFieldTypes::I64 => {
-                let field_value = query.parse::<i64>().map_err(|e| {
-                    let message = format!("Invalid search: {}", query);
-                    let reason = e.to_string();
-                    IndexError::new(message, reason)
-                })?;
-                Term::from_field_i64(field, field_value)
-            }
-            SurferFieldTypes::F64 => {
-                let field_value = query.parse::<f64>().map_err(|e| {
-                    let message = format!("Invalid search: {}", query);
-                    let reason = e.to_string();
-                    IndexError::new(message, reason)
-                })?;
-                Term::from_field_f64(field, field_value)
-            }
-            SurferFieldTypes::String => {
-                Term::from_field_text(field, query)
-            }
-            SurferFieldTypes::Bytes => {
-                let message = format!("Invalid search: {}", query);
-                let reason = "Cant search on bytes".to_string();
-                return Err(IndexError::new(message, reason));
-            }
-        };
-
+        let term = self.build_term(schema, field_name, field_value)?;
 
         let query = TermQuery::new(
             term,
@@ -427,10 +467,25 @@ impl Surfer {
         let index = self.indexes.get(name).unwrap();
         let reader = self.readers.get(name).unwrap().as_ref().unwrap();
 
-        let default_fields = self.fields.get(name).unwrap().clone();
+        let surfer_schema = self.schemas.get(name).unwrap();
+        let mappings = surfer_schema.resolve_mapping();
+
+        let mut fields = Vec::<Field>::with_capacity(mappings.len());
+        for (f, fe) in surfer_schema.schema.fields() {
+            let name = fe.name();
+            if !mappings.contains_key(name) {
+                continue;
+            };
+            let ft = mappings.get(name).unwrap();
+            match ft {
+                SurferFieldTypes::String => fields.push(f),
+                _ => {}
+            }
+        };
+
         let searcher = reader.searcher();
 
-        let query_parser = QueryParser::for_index(&index, default_fields);
+        let query_parser = QueryParser::for_index(&index, fields);
         let query = query_parser.parse_query(query)?;
         let limit = if limit.is_some() {
             limit.unwrap()
