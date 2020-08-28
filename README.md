@@ -15,12 +15,11 @@
 
 
 ## Features
-* Full text search
+* Full text/Term search
 * Serialize __**flat**__ JSON/Struct
 * Easy write and read API
 * Write multiple documents together
 * Support fuzzy word search (see examples)
-* Support Term query
 * Requires no runtime
 * No unsafe block
 * Run on rust stable
@@ -28,14 +27,13 @@
 
 ## Motivation
 * Allow your existing flat rust structs to be searched
-* Encoded/Decoded byte streams can be stored along side too, as base64 encoded string
 * The crate will support arbitary byte stream once it is supported by tantivy (see [here](https://github.com/tantivy-search/tantivy/issues/832))
 * This can just act as a container to actual data in databases, keeping indexes light
 * Create time-aware containers which could possibly updated/deleted
 * Create ephemeral storage for request/response
 * This can integrate with any web-server to index and search near real-time
-* This crate is just a convenience crate over [tantivy](https://github.com/tantivy-search/tantivy). 
 * This crate will focus mostly on user-workflow(s) related problem(s)
+* Uses [tantivy](https://github.com/tantivy-search/tantivy) under the hood.
 
 ## TODO
 * Add more examples

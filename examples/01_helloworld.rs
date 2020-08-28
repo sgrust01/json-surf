@@ -6,7 +6,7 @@ use serde::{Serialize, Deserialize};
 
 use json_surf::prelude::*;
 
-/// Main struct
+// Main struct
 #[derive(Serialize, Debug, Deserialize, PartialEq, PartialOrd, Clone)]
 struct UserInfo {
     first: String,
