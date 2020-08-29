@@ -35,16 +35,17 @@ impl Default for UserInfo {
 
 
 fn main() {
-    // Specify home location of indexes
+    // Specify home location for indexes
     let home = ".store".to_string();
-    let name = "users".to_string();
+    // Specify index name
+    let index_name = "users".to_string();
 
     // Prepare builder
     let mut builder = SurferBuilder::default();
     builder.set_home(&home);
 
     let data = UserInfo::default();
-    builder.add_struct(name.clone(), &data);
+    builder.add_struct(index_name.clone(), &data);
 
     // Prepare Surfer
     let mut surfer = Surfer::try_from(builder).unwrap();
@@ -78,35 +79,35 @@ fn main() {
     // Writing structs
 
     // Option 1: One struct at a time
-    let _ = surfer.insert_struct(&name, &john_doe).unwrap();
-    let _ = surfer.insert_struct(&name, &jane_doe).unwrap();
+    let _ = surfer.insert_struct(&index_name, &john_doe).unwrap();
+    let _ = surfer.insert_struct(&index_name, &jane_doe).unwrap();
 
     // Option 2: Write all structs together
     let users = vec![jonny_doe.clone(), jinny_doe.clone()];
-    let _ = surfer.insert_structs(&name, &users).unwrap();
+    let _ = surfer.insert_structs(&index_name, &users).unwrap();
 
     // Reading structs
 
     // Option 1: Full text search
     let expected = vec![john_doe.clone()];
-    let computed = surfer.read_structs::<UserInfo>(&name, "John", None, None).unwrap().unwrap();
+    let computed = surfer.read_structs::<UserInfo>(&index_name, "John", None, None).unwrap().unwrap();
     assert_eq!(expected, computed);
 
     let mut expected = vec![john_doe.clone(), jane_doe.clone(), jonny_doe.clone(), jinny_doe.clone()];
     expected.sort();
-    let mut computed = surfer.read_structs::<UserInfo>(&name, "doe", None, None).unwrap().unwrap();
+    let mut computed = surfer.read_structs::<UserInfo>(&index_name, "doe", None, None).unwrap().unwrap();
     computed.sort();
     assert_eq!(expected, computed);
 
     // Option 2: Term search
     let mut expected = vec![jonny_doe.clone(), jinny_doe.clone()];
     expected.sort();
-    let mut computed = surfer.read_stucts_by_field::<UserInfo>(&name, "age", "10", None, None).unwrap().unwrap();
+    let mut computed = surfer.read_stucts_by_field::<UserInfo>(&index_name, "age", "10", None, None).unwrap().unwrap();
     computed.sort();
     assert_eq!(expected, computed);
 
     // Clean-up
-    let path = surfer.which_index(&name).unwrap();
+    let path = surfer.which_index(&index_name).unwrap();
     let _ = remove_dir_all(&path);
     let _ = remove_dir_all(&home);
 }
