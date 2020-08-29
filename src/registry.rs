@@ -446,6 +446,10 @@ impl Surfer {
     }
 
     /// Uses term search
+    pub fn read_all_structs_by_field<T: Serialize + DeserializeOwned>(&mut self, index_name: &str, field_name: &str, field_value: &str) -> Result<Option<Vec<T>>, IndexError> {
+        self.read_structs_by_field::<T>(index_name, field_name, field_value, None, None)
+    }
+    /// Uses term search
     pub fn read_structs_by_field<T: Serialize + DeserializeOwned>(&mut self, index_name: &str, field_name: &str, field_value: &str, limit: Option<usize>, score: Option<f32>) -> Result<Option<Vec<T>>, IndexError> {
         let schema = self._resolve_surfer_schema(index_name)?;
         let term = self._build_term(schema, field_name, field_value)?;
@@ -510,6 +514,12 @@ impl Surfer {
         };
         Ok(Some(docs))
     }
+
+    /// Reads as struct
+    pub fn read_all_structs<T: Serialize + DeserializeOwned>(&mut self, name: &str, query: &str) -> Result<Option<Vec<T>>, IndexError> {
+        self.read_structs(name, query,  None, None)
+    }
+
     /// Reads as struct
     pub fn read_structs<T: Serialize + DeserializeOwned>(&mut self, name: &str, query: &str, limit: Option<usize>, score: Option<f32>) -> Result<Option<Vec<T>>, IndexError> {
         {
@@ -1041,19 +1051,19 @@ mod library_tests {
 
         // Option 1: Full text search
         let expected = vec![john_doe.clone()];
-        let computed = surfer.read_structs::<UserInfo>(&index_name, "John", None, None).unwrap().unwrap();
+        let computed = surfer.read_all_structs::<UserInfo>(&index_name, "John").unwrap().unwrap();
         assert_eq!(expected, computed);
 
         let mut expected = vec![john_doe.clone(), jane_doe.clone(), jonny_doe.clone(), jinny_doe.clone()];
         expected.sort();
-        let mut computed = surfer.read_structs::<UserInfo>(&index_name, "doe", None, None).unwrap().unwrap();
+        let mut computed = surfer.read_all_structs::<UserInfo>(&index_name, "doe").unwrap().unwrap();
         computed.sort();
         assert_eq!(expected, computed);
 
         // Option 2: Term search
         let mut expected = vec![jonny_doe.clone(), jinny_doe.clone()];
         expected.sort();
-        let mut computed = surfer.read_structs_by_field::<UserInfo>(&index_name, "age", "10", None, None).unwrap().unwrap();
+        let mut computed = surfer.read_all_structs_by_field::<UserInfo>(&index_name, "age", "10").unwrap().unwrap();
         computed.sort();
         assert_eq!(expected, computed);
 
@@ -1061,14 +1071,14 @@ mod library_tests {
 
         // Option 1: Delete based on all text fields
         // Before delete
-        let before = surfer.read_structs::<UserInfo>(&index_name, "doe", None, None).unwrap().unwrap();
+        let before = surfer.read_all_structs::<UserInfo>(&index_name, "doe").unwrap().unwrap();
         let before: HashSet<UserInfo> = HashSet::from_iter(before.into_iter());
 
         // Delete any occurrence of John (Actual call to delete)
         surfer.delete_structs(&index_name, "john").unwrap();
 
         // After delete
-        let after = surfer.read_structs::<UserInfo>(&index_name, "doe", None, None).unwrap().unwrap();
+        let after = surfer.read_all_structs::<UserInfo>(&index_name, "doe").unwrap().unwrap();
         let after: HashSet<UserInfo> = HashSet::from_iter(after.into_iter());
         // Check difference
         let computed: Vec<UserInfo> = before.difference(&after).map(|e| e.clone()).collect();
@@ -1078,14 +1088,14 @@ mod library_tests {
 
         // Option 2: Delete based on a specific field
         // Before delete
-        let before = surfer.read_structs_by_field::<UserInfo>(&index_name, "age", "10", None, None).unwrap().unwrap();
+        let before = surfer.read_all_structs_by_field::<UserInfo>(&index_name, "age", "10").unwrap().unwrap();
         let before: HashSet<UserInfo> = HashSet::from_iter(before.into_iter());
 
         // Delete any occurrence where age = 10 (Actual call to delete)
         surfer.delete_structs_by_field(&index_name, "age", "10").unwrap();
 
         // After delete
-        let after = surfer.read_structs_by_field::<UserInfo>(&index_name, "age", "10", None, None).unwrap().unwrap();
+        let after = surfer.read_all_structs_by_field::<UserInfo>(&index_name, "age", "10").unwrap().unwrap();
         let after: HashSet<UserInfo> = HashSet::from_iter(after.into_iter());
         // Check difference
         let mut computed: Vec<UserInfo> = before.difference(&after).map(|e| e.clone()).collect();

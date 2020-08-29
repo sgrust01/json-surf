@@ -58,6 +58,7 @@ fn main() {
     println!("{:#?}", users);
     println!("---------------------------");
 
+    block_thread(2);
 
     let query = "deo";
     let mut computed = surfer.read_structs::<User>(&name, query, Some(100), None).unwrap().unwrap();
