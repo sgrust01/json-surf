@@ -320,7 +320,7 @@ impl Surfer {
         Ok(())
     }
 
-    fn build_term(&self, schema: &SurferSchema, field_name: &str, field_value: &str) -> Result<Term, IndexError> {
+    fn _build_term(&self, schema: &SurferSchema, field_name: &str, field_value: &str) -> Result<Term, IndexError> {
         let mappings = schema.resolve_mapping();
 
         let field_type = mappings.get(field_name);
@@ -377,32 +377,42 @@ impl Surfer {
         Ok(term)
     }
 
-    /// Uses term search
-    pub fn read_stucts_by_field<T: Serialize + DeserializeOwned>(&mut self, index_name: &str, field_name: &str, field_value: &str, limit: Option<usize>, score: Option<f32>) -> Result<Option<Vec<T>>, IndexError> {
-        {
-            let result = self._prepare_index_reader(index_name);
-            if result.is_err() {
-                return Ok(None);
-            };
-        }
-        let reader = self.readers.get(index_name).unwrap().as_ref().unwrap();
+    fn _build_term_query(&self, schema: &SurferSchema, field_name: &str, field_value: &str, segment_postings_options: Option<IndexRecordOption>) -> Result<TermQuery, IndexError> {
+        let term = self._build_term(schema, field_name, field_value)?;
+        let segment_postings_options = match segment_postings_options {
+            Some(option) => option,
+            None => IndexRecordOption::Basic,
+        };
+        Ok(TermQuery::new(term, segment_postings_options))
+    }
 
+    fn _resolve_surfer_schema(&self, index_name: &str) -> Result<&SurferSchema, IndexError> {
         let schema = self.schemas.get(index_name);
         if schema.is_none() {
-            return Ok(None);
-        }
+            let message = format!("Invalid index operation for {}", index_name);
+            let reason = format!("No schema found for index: {}", index_name);
+            return Err(IndexError::new(message, reason));
+        };
         let schema = schema.unwrap();
+        Ok(schema)
+    }
 
-        let term = self.build_term(schema, field_name, field_value)?;
-
-        let query = TermQuery::new(
-            term,
-            IndexRecordOption::Basic,
-        );
-        let limit = match limit {
+    fn _resolve_limit(&self, limit: Option<usize>) -> usize {
+        match limit {
             Some(limit) => limit,
             None => 10
-        };
+        }
+    }
+
+
+
+    /// Uses term search
+    pub fn read_stucts_by_field<T: Serialize + DeserializeOwned>(&mut self, index_name: &str, field_name: &str, field_value: &str, limit: Option<usize>, score: Option<f32>) -> Result<Option<Vec<T>>, IndexError> {
+        let schema = self._resolve_surfer_schema(index_name)?;
+        let query = self._build_term_query(schema, field_name, field_value, None)?;
+        let limit = self._resolve_limit(limit);
+        let _ = self._prepare_index_reader(index_name)?;
+        let reader = self.readers.get(index_name).unwrap().as_ref().unwrap();
         let searcher = reader.searcher();
         let top_docs = searcher
             .search(&query, &TopDocs::with_limit(limit))
@@ -929,7 +939,7 @@ mod library_tests {
         }
     }
 
-     #[test]
+    #[test]
     fn test_user_info() {
         // Specify home location of indexes
         let home = ".store".to_string();
