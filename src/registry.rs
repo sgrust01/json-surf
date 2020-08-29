@@ -446,7 +446,7 @@ impl Surfer {
     }
 
     /// Uses term search
-    pub fn read_stucts_by_field<T: Serialize + DeserializeOwned>(&mut self, index_name: &str, field_name: &str, field_value: &str, limit: Option<usize>, score: Option<f32>) -> Result<Option<Vec<T>>, IndexError> {
+    pub fn read_structs_by_field<T: Serialize + DeserializeOwned>(&mut self, index_name: &str, field_name: &str, field_value: &str, limit: Option<usize>, score: Option<f32>) -> Result<Option<Vec<T>>, IndexError> {
         let schema = self._resolve_surfer_schema(index_name)?;
         let term = self._build_term(schema, field_name, field_value)?;
         let query = self._build_term_query(term, None)?;
@@ -1053,7 +1053,7 @@ mod library_tests {
         // Option 2: Term search
         let mut expected = vec![jonny_doe.clone(), jinny_doe.clone()];
         expected.sort();
-        let mut computed = surfer.read_stucts_by_field::<UserInfo>(&index_name, "age", "10", None, None).unwrap().unwrap();
+        let mut computed = surfer.read_structs_by_field::<UserInfo>(&index_name, "age", "10", None, None).unwrap().unwrap();
         computed.sort();
         assert_eq!(expected, computed);
 
@@ -1078,14 +1078,14 @@ mod library_tests {
 
         // Option 2: Delete based on a specific field
         // Before delete
-        let before = surfer.read_stucts_by_field::<UserInfo>(&index_name, "age", "10", None, None).unwrap().unwrap();
+        let before = surfer.read_structs_by_field::<UserInfo>(&index_name, "age", "10", None, None).unwrap().unwrap();
         let before: HashSet<UserInfo> = HashSet::from_iter(before.into_iter());
 
         // Delete any occurrence where age = 10 (Actual call to delete)
         surfer.delete_structs_by_field(&index_name, "age", "10").unwrap();
 
         // After delete
-        let after = surfer.read_stucts_by_field::<UserInfo>(&index_name, "age", "10", None, None).unwrap().unwrap();
+        let after = surfer.read_structs_by_field::<UserInfo>(&index_name, "age", "10", None, None).unwrap().unwrap();
         let after: HashSet<UserInfo> = HashSet::from_iter(after.into_iter());
         // Check difference
         let mut computed: Vec<UserInfo> = before.difference(&after).map(|e| e.clone()).collect();

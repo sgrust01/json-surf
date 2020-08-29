@@ -56,7 +56,7 @@ fn main() {
     println!("Inserting document: 1");
 
     // Give some time to indexing to complete
-    block_thread(1);
+    block_thread(2);
 
     // Lets query our one document
     let query = "sea whale";
@@ -70,7 +70,7 @@ fn main() {
     println!("Inserting document: 1");
 
     // Give some time to indexing to complete
-    block_thread(1);
+    block_thread(2);
 
     // Lets query again for two documents
     let query = "sea whale";
@@ -90,7 +90,7 @@ fn main() {
     println!("Inserting document: 50");
 
     // Give some time to indexing to complete
-    block_thread(2);
+    block_thread(3);
 
     // Lets query again for to get first 10 only
     let query = "sea whale";
