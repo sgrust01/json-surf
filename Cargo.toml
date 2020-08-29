@@ -1,6 +1,6 @@
 [package]
 name = "json-surf"
-version = "0.7.0"
+version = "0.8.0"
 authors = ["Saurav Gupta <sgrust01@gmail.com>"]
 edition = "2018"
 description = """
@@ -23,13 +23,11 @@ failure= "0.1.6"
 rand = "0.7.3"
 
 # Star of the show
-tantivy = "0.12.0"
+tantivy = "0.13.0"
 
 # Supports Spelling correction
 symspell="0.4.1"
 
-[dev-dependencies]
-base64 = "0.12.1"
 
 [[example]]
 name="helloworld"
@@ -40,14 +38,10 @@ name="tantivy"
 path= "examples/02_example_from_tantivy.rs"
 
 [[example]]
-name="userdata"
-path="examples/03_user_data.rs"
-
-[[example]]
 name="binarydata"
 path="examples/04_binary_data.rs"
 
 
 [[example]]
-name="fuzzyname"
-path= "examples/05_fuzzy_user_name.rs"
+name="fuzzy"
+path= "examples/03_fuzzy_user_name.rs"
