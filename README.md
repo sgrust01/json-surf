@@ -65,7 +65,6 @@ use serde::{Serialize, Deserialize};
 use json_surf::prelude::*;
 
 
-
 // Main struct
 #[derive(Serialize, Debug, Deserialize, PartialEq, PartialOrd, Clone)]
 struct UserInfo {
@@ -98,7 +97,7 @@ fn main() {
     // Specify home location for indexes
     let home = ".store".to_string();
     // Specify index name
-    let index_name = "users".to_string();
+    let index_name = "test_user_info".to_string();
 
     // Prepare builder
     let mut builder = SurferBuilder::default();
@@ -152,19 +151,19 @@ fn main() {
 
     // Option 1: Full text search
     let expected = vec![john_doe.clone()];
-    let computed = surfer.read_structs::<UserInfo>(&index_name, "John", None, None).unwrap().unwrap();
+    let computed = surfer.read_all_structs::<UserInfo>(&index_name, "John").unwrap().unwrap();
     assert_eq!(expected, computed);
 
     let mut expected = vec![john_doe.clone(), jane_doe.clone(), jonny_doe.clone(), jinny_doe.clone()];
     expected.sort();
-    let mut computed = surfer.read_structs::<UserInfo>(&index_name, "doe", None, None).unwrap().unwrap();
+    let mut computed = surfer.read_all_structs::<UserInfo>(&index_name, "doe").unwrap().unwrap();
     computed.sort();
     assert_eq!(expected, computed);
 
     // Option 2: Term search
     let mut expected = vec![jonny_doe.clone(), jinny_doe.clone()];
     expected.sort();
-    let mut computed = surfer.read_stucts_by_field::<UserInfo>(&index_name, "age", "10", None, None).unwrap().unwrap();
+    let mut computed = surfer.read_all_structs_by_field::<UserInfo>(&index_name, "age", "10").unwrap().unwrap();
     computed.sort();
     assert_eq!(expected, computed);
 
@@ -172,14 +171,14 @@ fn main() {
 
     // Option 1: Delete based on all text fields
     // Before delete
-    let before = surfer.read_structs::<UserInfo>(&index_name, "doe", None, None).unwrap().unwrap();
+    let before = surfer.read_all_structs::<UserInfo>(&index_name, "doe").unwrap().unwrap();
     let before: HashSet<UserInfo> = HashSet::from_iter(before.into_iter());
 
     // Delete any occurrence of John (Actual call to delete)
     surfer.delete_structs(&index_name, "john").unwrap();
 
     // After delete
-    let after = surfer.read_structs::<UserInfo>(&index_name, "doe", None, None).unwrap().unwrap();
+    let after = surfer.read_all_structs::<UserInfo>(&index_name, "doe").unwrap().unwrap();
     let after: HashSet<UserInfo> = HashSet::from_iter(after.into_iter());
     // Check difference
     let computed: Vec<UserInfo> = before.difference(&after).map(|e| e.clone()).collect();
@@ -189,14 +188,14 @@ fn main() {
 
     // Option 2: Delete based on a specific field
     // Before delete
-    let before = surfer.read_stucts_by_field::<UserInfo>(&index_name, "age", "10", None, None).unwrap().unwrap();
+    let before = surfer.read_all_structs_by_field::<UserInfo>(&index_name, "age", "10").unwrap().unwrap();
     let before: HashSet<UserInfo> = HashSet::from_iter(before.into_iter());
 
     // Delete any occurrence where age = 10 (Actual call to delete)
     surfer.delete_structs_by_field(&index_name, "age", "10").unwrap();
 
     // After delete
-    let after = surfer.read_stucts_by_field::<UserInfo>(&index_name, "age", "10", None, None).unwrap().unwrap();
+    let after = surfer.read_all_structs_by_field::<UserInfo>(&index_name, "age", "10").unwrap().unwrap();
     let after: HashSet<UserInfo> = HashSet::from_iter(after.into_iter());
     // Check difference
     let mut computed: Vec<UserInfo> = before.difference(&after).map(|e| e.clone()).collect();
@@ -205,7 +204,6 @@ fn main() {
     let mut expected = vec![jonny_doe, jinny_doe];
     expected.sort();
     assert_eq!(expected, computed);
-
 
 
     // Clean-up
