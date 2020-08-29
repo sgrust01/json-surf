@@ -150,7 +150,7 @@
 //!     // Option 2: Term search
 //!     let mut expected = vec![jonny_doe.clone(), jinny_doe.clone()];
 //!     expected.sort();
-//!     let mut computed = surfer.read_stucts_by_field::<UserInfo>(&index_name, "age", "10", None, None).unwrap().unwrap();
+//!     let mut computed = surfer.read_structs_by_field::<UserInfo>(&index_name, "age", "10", None, None).unwrap().unwrap();
 //!     computed.sort();
 //!     assert_eq!(expected, computed);
 //!
@@ -175,14 +175,14 @@
 //!
 //!     // Option 2: Delete based on a specific field
 //!     // Before delete
-//!     let before = surfer.read_stucts_by_field::<UserInfo>(&index_name, "age", "10", None, None).unwrap().unwrap();
+//!     let before = surfer.read_structs_by_field::<UserInfo>(&index_name, "age", "10", None, None).unwrap().unwrap();
 //!     let before: HashSet<UserInfo> = HashSet::from_iter(before.into_iter());
 //!
 //!     // Delete any occurrence where age = 10 (Actual call to delete)
 //!     surfer.delete_structs_by_field(&index_name, "age", "10").unwrap();
 //!
 //!     // After delete
-//!     let after = surfer.read_stucts_by_field::<UserInfo>(&index_name, "age", "10", None, None).unwrap().unwrap();
+//!     let after = surfer.read_structs_by_field::<UserInfo>(&index_name, "age", "10", None, None).unwrap().unwrap();
 //!     let after: HashSet<UserInfo> = HashSet::from_iter(after.into_iter());
 //!     // Check difference
 //!     let mut computed: Vec<UserInfo> = before.difference(&after).map(|e| e.clone()).collect();
