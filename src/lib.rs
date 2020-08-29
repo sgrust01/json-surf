@@ -1,25 +1,30 @@
 //! JSON-Surf
 //! ## Features
-//! * Full text search
+//! * Full text/Term search
 //! * Serialize __**flat**__ JSON/Struct
 //! * Easy write and read API
 //! * Write multiple documents together
+//! * Support fuzzy word search (see examples)
 //! * Requires no runtime
 //! * No unsafe block
-//! * Run on rust stable (Please check the Rust version, 1.39 does not work)
-//! * Coming Soon: Bigram suggestion & TF-IDF support
+//! * Run on rust stable
+//! * Coming Soon: Bi-gram suggestion & TF-IDF support
 //!
 //! ## Motivation
-//! * Allow your existing simples flat rust structs to be searched
-//! * Encoded/Decoded byte streams can be stored along side too as base64 encoded string
+//! * Allow your existing flat rust structs to be searched
 //! * The crate will support arbitary byte stream once it is supported by tantivy (see [here](https://github.com/tantivy-search/tantivy/issues/832))
 //! * This can just act as a container to actual data in databases, keeping indexes light
 //! * Create time-aware containers which could possibly updated/deleted
 //! * Create ephemeral storage for request/response
 //! * This can integrate with any web-server to index and search near real-time
-//! * This crate is just a convenience crate over [tantivy](https://github.com/tantivy-search/tantivy).
 //! * This crate will focus mostly on user-workflow(s) related problem(s)
+//! * Uses [tantivy](https://github.com/tantivy-search/tantivy) under the hood.
 //!
+//! ## TODO
+//! * Add more examples
+//! * Remove any further copy
+//! * Introduce more housekeeping API (If required)
+//! 
 //! ## Quickstart
 //!
 //! ### Prerequisite:
@@ -39,7 +44,7 @@
 //!
 //! use json_surf::prelude::*;
 //!
-//! /// Main struct
+//! // Main struct
 //! #[derive(Serialize, Debug, Deserialize, PartialEq, PartialOrd, Clone)]
 //! struct UserInfo {
 //!     first: String,
@@ -68,16 +73,17 @@
 //!
 //!
 //! fn main() {
-//!     // Specify home location of indexes
+//!     // Specify home location for indexes
 //!     let home = ".store".to_string();
-//!     let name = "users".to_string();
+//!     // Specify index name
+//!     let index_name = "users".to_string();
 //!
 //!     // Prepare builder
 //!     let mut builder = SurferBuilder::default();
 //!     builder.set_home(&home);
 //!
 //!     let data = UserInfo::default();
-//!     builder.add_struct(name.clone(), &data);
+//!     builder.add_struct(index_name.clone(), &data);
 //!
 //!     // Prepare Surfer
 //!     let mut surfer = Surfer::try_from(builder).unwrap();
@@ -111,35 +117,35 @@
 //!     // Writing structs
 //!
 //!     // Option 1: One struct at a time
-//!     let _ = surfer.insert_struct(&name, &john_doe).unwrap();
-//!     let _ = surfer.insert_struct(&name, &jane_doe).unwrap();
+//!     let _ = surfer.insert_struct(&index_name, &john_doe).unwrap();
+//!     let _ = surfer.insert_struct(&index_name, &jane_doe).unwrap();
 //!
 //!     // Option 2: Write all structs together
 //!     let users = vec![jonny_doe.clone(), jinny_doe.clone()];
-//!     let _ = surfer.insert_structs(&name, &users).unwrap();
+//!     let _ = surfer.insert_structs(&index_name, &users).unwrap();
 //!
 //!     // Reading structs
 //!
 //!     // Option 1: Full text search
 //!     let expected = vec![john_doe.clone()];
-//!     let computed = surfer.read_structs::<UserInfo>(&name, "John", None, None).unwrap().unwrap();
+//!     let computed = surfer.read_structs::<UserInfo>(&index_name, "John", None, None).unwrap().unwrap();
 //!     assert_eq!(expected, computed);
 //!
 //!     let mut expected = vec![john_doe.clone(), jane_doe.clone(), jonny_doe.clone(), jinny_doe.clone()];
 //!     expected.sort();
-//!     let mut computed = surfer.read_structs::<UserInfo>(&name, "doe", None, None).unwrap().unwrap();
+//!     let mut computed = surfer.read_structs::<UserInfo>(&index_name, "doe", None, None).unwrap().unwrap();
 //!     computed.sort();
 //!     assert_eq!(expected, computed);
 //!
 //!     // Option 2: Term search
 //!     let mut expected = vec![jonny_doe.clone(), jinny_doe.clone()];
 //!     expected.sort();
-//!     let mut computed = surfer.read_stucts_by_field::<UserInfo>(&name, "age", "10", None, None).unwrap().unwrap();
+//!     let mut computed = surfer.read_stucts_by_field::<UserInfo>(&index_name, "age", "10", None, None).unwrap().unwrap();
 //!     computed.sort();
 //!     assert_eq!(expected, computed);
 //!
 //!     // Clean-up
-//!     let path = surfer.which_index(&name).unwrap();
+//!     let path = surfer.which_index(&index_name).unwrap();
 //!     let _ = remove_dir_all(&path);
 //!     let _ = remove_dir_all(&home);
 //! }
@@ -180,7 +186,9 @@ pub mod fuzzy;
 #[cfg(test)]
 mod tests {
     use super::*;
+
     use serde::{Serialize};
+
     use serde_value;
     use std::collections::BTreeMap;
     use std::fmt;
@@ -209,7 +217,7 @@ mod tests {
             let schema = &self.0;
             let x = schema.fields();
             let mut fields = Vec::new();
-            for (field,_) in x {
+            for (field, _) in x {
                 fields.push(field);
             }
             f.write_str(format!("{:?}", fields).as_str())
@@ -366,4 +374,5 @@ mod tests {
         assert_eq!(format!("{:?}", expected), format!("{:?}", computed));
         assert_eq!(expected, computed);
     }
+
 }

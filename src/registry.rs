@@ -268,51 +268,55 @@ impl Surfer {
             false
         }
     }
+    fn _is_reader_valid(&self, name: &str) -> bool {
+        if !self.readers.contains_key(name) {
+            return false;
+        }
+        let reader = self.readers.get(name).unwrap();
+        if reader.is_some() {
+            true
+        } else {
+            false
+        }
+    }
+    fn _is_writer_valid(&self, name: &str) -> bool {
+        if !self.writers.contains_key(name) {
+            return false;
+        }
+        let writer = self.writers.get(name).unwrap();
+        if writer.is_some() {
+            true
+        } else {
+            false
+        }
+    }
     fn _prepare_index_writer(&mut self, index_name: &str) -> Result<(), IndexError> {
-        let valid = self._is_index_valid(index_name);
-        if !valid {
-            let message = format!("Unable to prepare the reader");
+        if !self._is_index_valid(index_name) {
+            let message = format!("Unable to prepare the writer");
             let reason = format!("Index was missing: {} ", index_name);
             return Err(IndexError::new(message, reason));
         };
-        let index = self.indexes.get(index_name).unwrap();
-        let writer = self.writers.get(index_name);
-        if writer.is_none() {
-            let message = format!("Unable to prepare the writer");
-            let reason = format!("Reader was missing: {} ", index_name);
-            return Err(IndexError::new(message, reason));
-        };
-        let writer = writer.unwrap();
-        if writer.is_some() {
+        if self._is_writer_valid(&index_name) {
             return Ok(());
         };
-
+        let index = self.indexes.get(index_name).unwrap();
         let writer = open_index_writer(index)?;
         let _ = self.writers.insert(index_name.to_string(), Some(writer));
         Ok(())
     }
 
-    fn _prepare_index_reader(&mut self, name: &str) -> Result<(), IndexError> {
-        let valid = self._is_index_valid(name);
-        if !valid {
+    fn _prepare_index_reader(&mut self, index_name: &str) -> Result<(), IndexError> {
+        if !self._is_index_valid(index_name) {
             let message = format!("Unable to prepare the reader");
-            let reason = format!("Index was missing: {} ", name);
+            let reason = format!("Index was missing: {} ", index_name);
             return Err(IndexError::new(message, reason));
         };
-        let index = self.indexes.get(name).unwrap();
-        let reader = self.readers.get(name);
-        if reader.is_none() {
-            let message = format!("Unable to prepare the reader");
-            let reason = format!("Reader was missing: {} ", name);
-            return Err(IndexError::new(message, reason));
-        };
-        let reader = reader.unwrap();
-        if reader.is_some() {
+        if self._is_reader_valid(&index_name) {
             return Ok(());
         };
-
+        let index = self.indexes.get(index_name).unwrap();
         let reader = open_index_reader(index)?;
-        let _ = self.readers.insert(name.to_string(), Some(reader));
+        let _ = self.readers.insert(index_name.to_string(), Some(reader));
         Ok(())
     }
 
@@ -593,13 +597,14 @@ pub enum Control {
 
 
 #[cfg(test)]
-mod tests {
+mod library_tests {
     use super::*;
     use super::super::utils;
     use serde::{Serialize, Deserialize};
     use std::fmt::Debug;
     use std::path::Path;
     use std::fs::remove_dir_all;
+    use std::cmp::{Ord, Ordering, Eq};
 
 
     #[derive(Clone, Serialize, Debug, Deserialize, PartialEq)]
@@ -896,4 +901,134 @@ mod tests {
 
         assert_eq!(format!("{:?}", computed1.schemas), format!("{:?}", computed2.schemas))
     }
+
+    // Main struct
+    #[derive(Serialize, Debug, Deserialize, PartialEq, PartialOrd, Clone)]
+    struct UserInfo {
+        first: String,
+        last: String,
+        age: u8,
+    }
+
+    impl UserInfo {
+        pub fn new(first: String, last: String, age: u8) -> Self {
+            Self {
+                first,
+                last,
+                age,
+            }
+        }
+    }
+
+    impl Default for UserInfo {
+        fn default() -> Self {
+            let first = "".to_string();
+            let last = "".to_string();
+            let age = 0u8;
+            UserInfo::new(first, last, age)
+        }
+    }
+
+     #[test]
+    fn test_user_info() {
+        // Specify home location of indexes
+        let home = ".store".to_string();
+        let index_name = "test_user_info".to_string();
+
+        // Prepare builder
+        let mut builder = SurferBuilder::default();
+        builder.set_home(&home);
+
+        let data = UserInfo::default();
+        builder.add_struct(index_name.clone(), &data);
+
+        // Prepare Surfer
+        let mut surfer = Surfer::try_from(builder).unwrap();
+
+        // Prepare data to insert & search
+
+        // User 1: John Doe
+        let first = "John".to_string();
+        let last = "Doe".to_string();
+        let age = 20u8;
+        let john_doe = UserInfo::new(first, last, age);
+
+        // User 2: Jane Doe
+        let first = "Jane".to_string();
+        let last = "Doe".to_string();
+        let age = 18u8;
+        let jane_doe = UserInfo::new(first, last, age);
+
+        // User 3: Jonny Doe
+        let first = "Jonny".to_string();
+        let last = "Doe".to_string();
+        let age = 10u8;
+        let jonny_doe = UserInfo::new(first, last, age);
+
+        // User 4: Jinny Doe
+        let first = "Jinny".to_string();
+        let last = "Doe".to_string();
+        let age = 10u8;
+        let jinny_doe = UserInfo::new(first, last, age);
+
+        // Writing structs
+
+        // Option 1: One struct at a time
+        let _ = surfer.insert_struct(&index_name, &john_doe).unwrap();
+        let _ = surfer.insert_struct(&index_name, &jane_doe).unwrap();
+
+        // Option 2: Write all structs together
+        let users = vec![jonny_doe.clone(), jinny_doe.clone()];
+        let _ = surfer.insert_structs(&index_name, &users).unwrap();
+
+        // Reading structs
+
+        // Option 1: Full text search
+        let expected = vec![john_doe.clone()];
+        let computed = surfer.read_structs::<UserInfo>(&index_name, "John", None, None).unwrap().unwrap();
+        assert_eq!(expected, computed);
+
+        let mut expected = vec![john_doe.clone(), jane_doe.clone(), jonny_doe.clone(), jinny_doe.clone()];
+        expected.sort();
+        let mut computed = surfer.read_structs::<UserInfo>(&index_name, "doe", None, None).unwrap().unwrap();
+        computed.sort();
+        assert_eq!(expected, computed);
+
+        // Option 2: Term search
+        let mut expected = vec![jonny_doe.clone(), jinny_doe.clone()];
+        expected.sort();
+        let mut computed = surfer.read_stucts_by_field::<UserInfo>(&index_name, "age", "10", None, None).unwrap().unwrap();
+        computed.sort();
+        assert_eq!(expected, computed);
+
+        // Clean-up
+        let path = surfer.which_index(&index_name).unwrap();
+        let _ = remove_dir_all(&path);
+        let _ = remove_dir_all(&home);
+    }
+
+    /// Convenience method for sorting & likely not required in user code
+    impl Ord for UserInfo {
+        fn cmp(&self, other: &Self) -> Ordering {
+            if self.first == other.first && self.last == other.last {
+                return Ordering::Equal;
+            };
+            if self.first == other.first {
+                if self.last > other.last {
+                    Ordering::Greater
+                } else {
+                    Ordering::Less
+                }
+            } else {
+                if self.first > other.first {
+                    Ordering::Greater
+                } else {
+                    Ordering::Less
+                }
+            }
+        }
+    }
+
+    /// Convenience method for sorting & likely not required in user code
+    impl Eq for UserInfo {}
 }
