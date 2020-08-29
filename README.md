@@ -15,9 +15,9 @@
 
 
 ## Features
-* Full text/Term search
+* Full Text/Term search
+* Easy read, write & delete API
 * Serialize __**flat**__ JSON/Struct
-* Easy write and read API
 * Write multiple documents together
 * Support fuzzy word search (see examples)
 * Requires no runtime
@@ -53,12 +53,18 @@
 ### Example
 ```rust
 use std::convert::TryFrom;
-use std::fs::remove_dir_all;
+use std::collections::HashSet;
+use std::iter::FromIterator;
+use std::hash::{Hash, Hasher};
 use std::cmp::{Ord, Ordering, Eq};
+
+use std::fs::remove_dir_all;
 
 use serde::{Serialize, Deserialize};
 
 use json_surf::prelude::*;
+
+
 
 // Main struct
 #[derive(Serialize, Debug, Deserialize, PartialEq, PartialOrd, Clone)]
@@ -140,6 +146,8 @@ fn main() {
     let users = vec![jonny_doe.clone(), jinny_doe.clone()];
     let _ = surfer.insert_structs(&index_name, &users).unwrap();
 
+    block_thread(1);
+
     // Reading structs
 
     // Option 1: Full text search
@@ -159,6 +167,46 @@ fn main() {
     let mut computed = surfer.read_stucts_by_field::<UserInfo>(&index_name, "age", "10", None, None).unwrap().unwrap();
     computed.sort();
     assert_eq!(expected, computed);
+
+    // Delete structs
+
+    // Option 1: Delete based on all text fields
+    // Before delete
+    let before = surfer.read_structs::<UserInfo>(&index_name, "doe", None, None).unwrap().unwrap();
+    let before: HashSet<UserInfo> = HashSet::from_iter(before.into_iter());
+
+    // Delete any occurrence of John (Actual call to delete)
+    surfer.delete_structs(&index_name, "john").unwrap();
+
+    // After delete
+    let after = surfer.read_structs::<UserInfo>(&index_name, "doe", None, None).unwrap().unwrap();
+    let after: HashSet<UserInfo> = HashSet::from_iter(after.into_iter());
+    // Check difference
+    let computed: Vec<UserInfo> = before.difference(&after).map(|e| e.clone()).collect();
+    // Only John should be deleted
+    let expected = vec![john_doe];
+    assert_eq!(expected, computed);
+
+    // Option 2: Delete based on a specific field
+    // Before delete
+    let before = surfer.read_stucts_by_field::<UserInfo>(&index_name, "age", "10", None, None).unwrap().unwrap();
+    let before: HashSet<UserInfo> = HashSet::from_iter(before.into_iter());
+
+    // Delete any occurrence where age = 10 (Actual call to delete)
+    surfer.delete_structs_by_field(&index_name, "age", "10").unwrap();
+
+    // After delete
+    let after = surfer.read_stucts_by_field::<UserInfo>(&index_name, "age", "10", None, None).unwrap().unwrap();
+    let after: HashSet<UserInfo> = HashSet::from_iter(after.into_iter());
+    // Check difference
+    let mut computed: Vec<UserInfo> = before.difference(&after).map(|e| e.clone()).collect();
+    computed.sort();
+    // Both Jonny & Jinny should be deleted
+    let mut expected = vec![jonny_doe, jinny_doe];
+    expected.sort();
+    assert_eq!(expected, computed);
+
+
 
     // Clean-up
     let path = surfer.which_index(&index_name).unwrap();
@@ -190,4 +238,18 @@ impl Ord for UserInfo {
 
 /// Convenience method for sorting & likely not required in user code
 impl Eq for UserInfo {}
+
+/// Convenience method for sorting & likely not required in user code
+impl Hash for UserInfo {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        for i in self.first.as_bytes() {
+            state.write_u8(*i);
+        }
+        for i in self.last.as_bytes() {
+            state.write_u8(*i);
+        }
+        state.write_u8(self.age);
+        state.finish();
+    }
+}
 ```

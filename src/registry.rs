@@ -319,7 +319,24 @@ impl Surfer {
         let _ = self.readers.insert(index_name.to_string(), Some(reader));
         Ok(())
     }
-
+    fn _build_terms(&self, schema: &SurferSchema, field_value: &str) -> Result<Vec<Term>, IndexError> {
+        let mut field_names = Vec::<&String>::with_capacity(schema.mappings.len());
+        for (field_name, field_type) in schema.mappings.iter() {
+            match field_type {
+                SurferFieldTypes::String => field_names.push(field_name),
+                _ => {}
+            };
+        }
+        let mut terms = Vec::<Term>::with_capacity(schema.mappings.len());
+        if field_names.is_empty() {
+            return Ok(terms);
+        };
+        for field_name in field_names {
+            let term = self._build_term(schema, field_name, field_value)?;
+            terms.push(term);
+        }
+        Ok(terms)
+    }
     fn _build_term(&self, schema: &SurferSchema, field_name: &str, field_value: &str) -> Result<Term, IndexError> {
         let mappings = schema.resolve_mapping();
 
@@ -377,8 +394,7 @@ impl Surfer {
         Ok(term)
     }
 
-    fn _build_term_query(&self, schema: &SurferSchema, field_name: &str, field_value: &str, segment_postings_options: Option<IndexRecordOption>) -> Result<TermQuery, IndexError> {
-        let term = self._build_term(schema, field_name, field_value)?;
+    fn _build_term_query(&self, term: Term, segment_postings_options: Option<IndexRecordOption>) -> Result<TermQuery, IndexError> {
         let segment_postings_options = match segment_postings_options {
             Some(option) => option,
             None => IndexRecordOption::Basic,
@@ -404,12 +420,36 @@ impl Surfer {
         }
     }
 
+    /// Uses term search
+    pub fn delete_structs_by_field(&mut self, index_name: &str, field_name: &str, field_value: &str) -> Result<(), IndexError> {
+        let schema = self._resolve_surfer_schema(index_name)?;
+        let term = self._build_term(&schema, field_name, field_value)?;
+        let _ = self._prepare_index_writer(index_name)?;
+        let writer = self.writers.get_mut(index_name).unwrap().as_mut().unwrap();
+        let _ = writer.delete_term(term);
+        let _ = writer.commit()?;
+        Ok(())
+    }
 
+    /// Uses full text serach
+    pub fn delete_structs(&mut self, index_name: &str, field_value: &str) -> Result<(), IndexError> {
+        let schema = self._resolve_surfer_schema(index_name)?;
+        let terms = self._build_terms(&schema, field_value)?;
+        let _ = self._prepare_index_writer(index_name)?;
+        let writer = self.writers.get_mut(index_name).unwrap().as_mut().unwrap();
+        for i in 0..terms.len() {
+            let term = terms.get(i).unwrap().to_owned();
+            let _ = writer.delete_term(term);
+        }
+        let _ = writer.commit()?;
+        Ok(())
+    }
 
     /// Uses term search
     pub fn read_stucts_by_field<T: Serialize + DeserializeOwned>(&mut self, index_name: &str, field_name: &str, field_value: &str, limit: Option<usize>, score: Option<f32>) -> Result<Option<Vec<T>>, IndexError> {
         let schema = self._resolve_surfer_schema(index_name)?;
-        let query = self._build_term_query(schema, field_name, field_value, None)?;
+        let term = self._build_term(schema, field_name, field_value)?;
+        let query = self._build_term_query(term, None)?;
         let limit = self._resolve_limit(limit);
         let _ = self._prepare_index_reader(index_name)?;
         let reader = self.readers.get(index_name).unwrap().as_ref().unwrap();
@@ -615,6 +655,9 @@ mod library_tests {
     use std::path::Path;
     use std::fs::remove_dir_all;
     use std::cmp::{Ord, Ordering, Eq};
+    use std::collections::HashSet;
+    use std::iter::FromIterator;
+    use std::hash::{Hash, Hasher};
 
 
     #[derive(Clone, Serialize, Debug, Deserialize, PartialEq)]
@@ -941,8 +984,9 @@ mod library_tests {
 
     #[test]
     fn test_user_info() {
-        // Specify home location of indexes
+        // Specify home location for indexes
         let home = ".store".to_string();
+        // Specify index name
         let index_name = "test_user_info".to_string();
 
         // Prepare builder
@@ -991,6 +1035,8 @@ mod library_tests {
         let users = vec![jonny_doe.clone(), jinny_doe.clone()];
         let _ = surfer.insert_structs(&index_name, &users).unwrap();
 
+        block_thread(1);
+
         // Reading structs
 
         // Option 1: Full text search
@@ -1010,6 +1056,45 @@ mod library_tests {
         let mut computed = surfer.read_stucts_by_field::<UserInfo>(&index_name, "age", "10", None, None).unwrap().unwrap();
         computed.sort();
         assert_eq!(expected, computed);
+
+        // Delete structs
+
+        // Option 1: Delete based on all text fields
+        // Before delete
+        let before = surfer.read_structs::<UserInfo>(&index_name, "doe", None, None).unwrap().unwrap();
+        let before: HashSet<UserInfo> = HashSet::from_iter(before.into_iter());
+
+        // Delete any occurrence of John (Actual call to delete)
+        surfer.delete_structs(&index_name, "john").unwrap();
+
+        // After delete
+        let after = surfer.read_structs::<UserInfo>(&index_name, "doe", None, None).unwrap().unwrap();
+        let after: HashSet<UserInfo> = HashSet::from_iter(after.into_iter());
+        // Check difference
+        let computed: Vec<UserInfo> = before.difference(&after).map(|e| e.clone()).collect();
+        // Only John should be deleted
+        let expected = vec![john_doe];
+        assert_eq!(expected, computed);
+
+        // Option 2: Delete based on a specific field
+        // Before delete
+        let before = surfer.read_stucts_by_field::<UserInfo>(&index_name, "age", "10", None, None).unwrap().unwrap();
+        let before: HashSet<UserInfo> = HashSet::from_iter(before.into_iter());
+
+        // Delete any occurrence where age = 10 (Actual call to delete)
+        surfer.delete_structs_by_field(&index_name, "age", "10").unwrap();
+
+        // After delete
+        let after = surfer.read_stucts_by_field::<UserInfo>(&index_name, "age", "10", None, None).unwrap().unwrap();
+        let after: HashSet<UserInfo> = HashSet::from_iter(after.into_iter());
+        // Check difference
+        let mut computed: Vec<UserInfo> = before.difference(&after).map(|e| e.clone()).collect();
+        computed.sort();
+        // Both Jonny & Jinny should be deleted
+        let mut expected = vec![jonny_doe, jinny_doe];
+        expected.sort();
+        assert_eq!(expected, computed);
+
 
         // Clean-up
         let path = surfer.which_index(&index_name).unwrap();
@@ -1041,4 +1126,18 @@ mod library_tests {
 
     /// Convenience method for sorting & likely not required in user code
     impl Eq for UserInfo {}
+
+    /// Convenience method for sorting & likely not required in user code
+    impl Hash for UserInfo {
+        fn hash<H: Hasher>(&self, state: &mut H) {
+            for i in self.first.as_bytes() {
+                state.write_u8(*i);
+            }
+            for i in self.last.as_bytes() {
+                state.write_u8(*i);
+            }
+            state.write_u8(self.age);
+            state.finish();
+        }
+    }
 }
