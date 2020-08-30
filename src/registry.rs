@@ -1,10 +1,11 @@
-use std::collections::{HashMap, BTreeMap};
+use std::collections::{HashMap, BTreeMap, HashSet};
 use std::convert::TryFrom;
 use std::ops::{Deref, DerefMut};
 use std::fmt;
+use std::hash::{Hash, Hasher};
 
 use tantivy::schema::{Schema, Field, TextOptions, IntOptions, IndexRecordOption};
-use tantivy::{Index, IndexReader, IndexWriter, Document, Term};
+use tantivy::{Index, IndexReader, IndexWriter, Document, Term, DocAddress};
 use tantivy::query::{QueryParser, TermQuery};
 use tantivy::collector::{TopDocs};
 use tantivy::schema::Value as SchemaValue;
@@ -15,6 +16,8 @@ use crate::prelude::join;
 
 use serde::{Serialize};
 use serde::de::DeserializeOwned;
+use failure::_core::fmt::{Debug, Display};
+
 
 #[derive(Clone, Eq, PartialEq)]
 pub enum SurferFieldTypes {
@@ -147,6 +150,99 @@ impl SurferBuilder {
     /// Add a serializable rust struct panics otherwise
     pub fn add_struct<T: Serialize>(&mut self, name: String, data: &T) {
         self.add_serde::<T>(name, data);
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct AndCondition {
+    field_name: String,
+    field_value: String,
+}
+
+impl AndCondition {
+    pub fn new(field_name: String, field_value: String) -> Self {
+        Self {
+            field_name,
+            field_value,
+        }
+    }
+    pub fn update_field_value(&mut self, field_value: String) {
+        self.field_value = field_value;
+    }
+    pub fn resolve_field_name(&self) -> &String {
+        &self.field_name
+    }
+    pub fn resolve_field_value(&self) -> &String {
+        &self.field_value
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct OrCondition {
+    conditions: Vec<AndCondition>,
+}
+
+
+impl OrCondition {
+    pub fn new(conditions: Vec<AndCondition>) -> Self {
+        Self {
+            conditions
+        }
+    }
+    pub fn resolve_conditions_for_edit(&mut self) -> &mut Vec<AndCondition> {
+        &mut self.conditions
+    }
+    pub fn resolve_conditions(&self) -> &Vec<AndCondition> {
+        &self.conditions
+    }
+}
+
+
+impl From<(String, String)> for OrCondition {
+    fn from((field_name, field_value): (String, String)) -> Self {
+        let conditions = vec![AndCondition::new(field_name, field_value)];
+        Self::new(conditions)
+    }
+}
+
+/// Surfer: Client API
+pub struct Surf {
+    surfer: Surfer
+}
+
+impl Surf {
+    pub fn new(surfer: Surfer) -> Self {
+        Self {
+            surfer,
+        }
+    }
+
+    pub fn apply<T: Serialize + DeserializeOwned>(&mut self, index_name: &str, conditions: &Vec<OrCondition>, limit: Option<usize>, score: Option<f32>) -> Result<Option<Vec<T>>, IndexError> {
+        self.surfer.multiple_structs_by_field(index_name, conditions, limit, score)
+    }
+    pub fn apply_all<T: Serialize + DeserializeOwned>(&mut self, index_name: &str, conditions: &Vec<OrCondition>) -> Result<Option<Vec<T>>, IndexError> {
+        let limit = Some(100usize);
+        let score = Some(0f32);
+        self.apply(index_name, conditions, limit, score)
+    }
+}
+
+impl Deref for Surf {
+    type Target = Surfer;
+    fn deref(&self) -> &Self::Target {
+        &self.surfer
+    }
+}
+
+impl DerefMut for Surf {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.surfer
+    }
+}
+
+impl From<Surfer> for Surf {
+    fn from(surfer: Surfer) -> Self {
+        Self::new(surfer)
     }
 }
 
@@ -420,6 +516,13 @@ impl Surfer {
         }
     }
 
+    fn _resolve_score(&self, score: Option<f32>) -> f32 {
+        match score {
+            Some(score) => score,
+            None => 90f32
+        }
+    }
+
     /// Uses term search
     pub fn delete_structs_by_field(&mut self, index_name: &str, field_name: &str, field_value: &str) -> Result<(), IndexError> {
         let schema = self._resolve_surfer_schema(index_name)?;
@@ -517,7 +620,7 @@ impl Surfer {
 
     /// Reads as struct
     pub fn read_all_structs<T: Serialize + DeserializeOwned>(&mut self, name: &str, query: &str) -> Result<Option<Vec<T>>, IndexError> {
-        self.read_structs(name, query,  None, None)
+        self.read_structs(name, query, None, None)
     }
 
     /// Reads as struct
@@ -565,6 +668,68 @@ impl Surfer {
             }
             let doc = searcher.doc(doc_address)?;
             let doc = self.jsonify(name, &doc)?;
+            let doc = serde_json::from_str::<T>(&doc).unwrap();
+            docs.push(doc);
+        };
+        Ok(Some(docs))
+    }
+    /// Uses term search
+    fn multiple_structs_by_field<T: Serialize + DeserializeOwned>(&mut self, index_name: &str, conditions: &Vec<OrCondition>, limit: Option<usize>, score: Option<f32>) -> Result<Option<Vec<T>>, IndexError> {
+        let _ = self._prepare_index_reader(index_name)?;
+        let reader = self.readers.get(index_name).unwrap().as_ref().unwrap();
+        let searcher = reader.searcher();
+        let limit = self._resolve_limit(limit);
+        let cutoff = self._resolve_score(score);
+        let schema = self._resolve_surfer_schema(index_name)?;
+        let mut all_docs = HashSet::<SurferDocAddress>::new();
+        for condition in conditions {
+            let and = condition.resolve_conditions();
+            let mut docs = HashSet::new();
+            for (i, c) in and.iter().enumerate() {
+                let field_name = c.resolve_field_name();
+                let field_value = c.resolve_field_value();
+                let term = self._build_term(schema, field_name, field_value)?;
+                let query = self._build_term_query(term, None)?;
+                let mut tmp = HashSet::new();
+                let top_docs = searcher
+                    .search(&query, &TopDocs::with_limit(limit))
+                    .map_err(|e| {
+                        let message = "Error while term query".to_string();
+                        let reason = e.to_string();
+                        IndexError::new(message, reason)
+                    })?;
+
+
+                for (score, address) in top_docs.to_owned() {
+                    if score < cutoff {
+                        continue;
+                    };
+                    if i == 0 {
+                        let address = SurferDocAddress::from(address);
+                        tmp.insert(address);
+                        continue;
+                    }
+
+                    let address = SurferDocAddress::from(address);
+                    if docs.contains(&address) {
+                        tmp.insert(address);
+                    }
+                }
+
+                if tmp.is_empty() {
+                    docs.clear();
+                    break;
+                } else {
+                    docs.extend(tmp);
+                }
+            }
+            all_docs.extend(docs);
+        };
+
+        let mut docs = Vec::with_capacity(all_docs.len());
+        for doc_address in all_docs {
+            let doc = searcher.doc(doc_address.0)?;
+            let doc = self.jsonify(index_name, &doc)?;
             let doc = serde_json::from_str::<T>(&doc).unwrap();
             docs.push(doc);
         };
@@ -649,6 +814,69 @@ impl TryFrom<SurferBuilder> for Surfer {
     }
 }
 
+struct SurferDocAddress(DocAddress);
+
+impl SurferDocAddress {
+    fn new(address: DocAddress) -> Self {
+        Self(address)
+    }
+}
+
+impl From<DocAddress> for SurferDocAddress {
+    fn from(address: DocAddress) -> Self {
+        Self::new(address)
+    }
+}
+
+
+impl Deref for SurferDocAddress {
+    type Target = DocAddress;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for SurferDocAddress {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl Display for SurferDocAddress {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let address = &self.0;
+        write!(f, "SegmentLocalId = {}, DocId {})", address.0, address.1)
+    }
+}
+
+impl Debug for SurferDocAddress {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let address = &self.0;
+        write!(f, "SegmentLocalId = {}, DocId {})", address.0, address.1)
+    }
+}
+
+
+impl PartialEq for SurferDocAddress {
+    fn eq(&self, other: &SurferDocAddress) -> bool {
+        let doc_address = &self.0;
+        let other_doc_address = other.0;
+        doc_address.0 == other_doc_address.0 && doc_address.1 == other_doc_address.1
+    }
+}
+
+impl Hash for SurferDocAddress {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let address = self.0;
+        state.write_u32(address.0);
+        state.write_u32(address.1);
+        state.finish();
+    }
+}
+
+impl Eq for SurferDocAddress {}
+
 /// Container to pass through config to tantivy
 pub enum Control {
     ControlTextOptions(TextOptions),
@@ -719,6 +947,7 @@ mod library_tests {
         assert!(result.is_ok());
         assert!(path.exists());
         let _ = remove_dir_all(index_path);
+        let _ = remove_dir_all(home);
     }
 
     #[test]
@@ -734,7 +963,7 @@ mod library_tests {
         let name = random_string(None);
         let mut builder = SurferBuilder::default();
         let data = OldMan::default();
-        let home = "tmp";
+        let home = ".validate_read_existing_documents_as_strings";
         let index_path = format!("{}/{}", home, name);
         let path = Path::new(&index_path);
         assert!(!path.exists());
@@ -787,12 +1016,13 @@ mod library_tests {
         assert_eq!(computed, vec![expected.clone()]);
 
         let _ = remove_dir_all(&index_path);
+        let _ = remove_dir_all(home);
     }
 
     #[test]
     fn validate_as_rust_structs() {
         let name = random_string(None);
-        let home = "tmp".to_string();
+        let home = ".validate_as_rust_structs".to_string();
         let index_path = format!("{}/{}", home, name);
         let path = Path::new(&index_path);
         assert!(!path.exists());
@@ -833,13 +1063,14 @@ mod library_tests {
 
 
         let _ = remove_dir_all(index_path);
+        let _ = remove_dir_all(home);
     }
 
     #[test]
     fn validate_initialize_mmap() {
-        let home = "tmp/indexes";
+        let home = ".validate_initialize_mmap";
         let index_name = "someindex";
-        let path_to_index = "tmp/indexes/someindex";
+        let path_to_index = ".validate_initialize_mmap/someindex";
         let path = Path::new(path_to_index);
         assert!(!path.exists());
         let oldman = OldMan::default();
@@ -848,12 +1079,16 @@ mod library_tests {
         let _ = initialize_mmap(index_name, home, &schema);
         assert!(path.exists());
         let _ = std::fs::remove_dir_all(path_to_index);
+
+        let _ = remove_dir_all(path_to_index);
+        let _ = remove_dir_all(index_name);
+        let _ = remove_dir_all(home);
     }
 
     #[test]
     fn validate_read_existing_documents_as_structs_limit_one() {
         let name = random_string(None);
-        let home = "tmp";
+        let home = ".validate_read_existing_documents_as_structs_limit_one";
         let index_path = format!("{}/{}", home, name);
         let path = Path::new(&index_path);
         assert!(!path.exists());
@@ -891,12 +1126,13 @@ mod library_tests {
 
         assert!(path.exists());
         let _ = remove_dir_all(index_path);
+        let _ = remove_dir_all(home);
     }
 
     #[test]
     fn validate_read_existing_documents_as_structs_default_ten() {
         let name = random_string(None);
-        let home = "tmp";
+        let home = ".validate_read_existing_documents_as_structs_default_ten";
         let index_path = format!("{}/{}", home, name);
         let path = Path::new(&index_path);
         assert!(!path.exists());
@@ -933,6 +1169,7 @@ mod library_tests {
 
         assert!(path.exists());
         let _ = remove_dir_all(index_path);
+        let _ = remove_dir_all(home);
     }
 
     #[derive(Serialize)]
@@ -995,9 +1232,9 @@ mod library_tests {
     #[test]
     fn test_user_info() {
         // Specify home location for indexes
-        let home = ".store".to_string();
+        let home = ".test_user_info".to_string();
         // Specify index name
-        let index_name = "test_user_info".to_string();
+        let index_name = "store".to_string();
 
         // Prepare builder
         let mut builder = SurferBuilder::default();
@@ -1105,6 +1342,92 @@ mod library_tests {
         expected.sort();
         assert_eq!(expected, computed);
 
+
+        // Clean-up
+        let path = surfer.which_index(&index_name).unwrap();
+        let _ = remove_dir_all(&path);
+        let _ = remove_dir_all(&home);
+    }
+
+    #[test]
+    fn test_where_clause() {
+        // Specify home location for indexes
+        let home = ".test_where_clause".to_string();
+        // Specify index name
+        let index_name = "store".to_string();
+
+        // Prepare builder
+        let mut builder = SurferBuilder::default();
+        builder.set_home(&home);
+
+        let data = UserInfo::default();
+        builder.add_struct(index_name.clone(), &data);
+
+        // Prepare Surfer
+        let surfer = Surfer::try_from(builder).unwrap();
+        let mut surf = Surf::from(surfer);
+        let surfer = &mut surf;
+
+        // Prepare data to insert & search
+
+        // User 1: John Doe
+        let first = "John".to_string();
+        let last = "Doe".to_string();
+        let age = 20u8;
+        let john_doe = UserInfo::new(first, last, age);
+
+        // User 2: Jane Doe
+        let first = "Jane".to_string();
+        let last = "Doe".to_string();
+        let age = 18u8;
+        let jane_doe = UserInfo::new(first, last, age);
+
+        // User 3: Jonny Doe
+        let first = "Jonny".to_string();
+        let last = "Doe".to_string();
+        let age = 10u8;
+        let jonny_doe = UserInfo::new(first, last, age);
+
+        // User 4: Jinny Doe
+        let first = "Jinny".to_string();
+        let last = "Doe".to_string();
+        let age = 10u8;
+        let jinny_doe = UserInfo::new(first, last, age);
+
+        // Writing structs
+
+        let users = vec![john_doe.clone(), jane_doe.clone(), jonny_doe.clone(), jinny_doe.clone()];
+        let _ = surfer.insert_structs(&index_name, &users).unwrap();
+        block_thread(1);
+
+        let conditions = vec![OrCondition::from(("age".to_string(), "10".to_string()))];
+        let mut expected = vec![jonny_doe.clone(), jinny_doe.clone()];
+        let mut computed = surfer.apply_all::<UserInfo>(&index_name, &conditions).unwrap().unwrap();
+        expected.sort();
+        computed.sort();
+        assert_eq!(expected, computed);
+
+        let conditions = vec![OrCondition::from(("age".to_string(), "10".to_string())),
+                              OrCondition::from(("first".to_string(), "john".to_string()))];
+        let mut expected = vec![john_doe.clone(), jonny_doe.clone(), jinny_doe.clone()];
+        let mut computed = surfer.apply_all::<UserInfo>(&index_name, &conditions).unwrap().unwrap();
+        expected.sort();
+        computed.sort();
+        assert_eq!(expected, computed);
+
+
+        let name_condition = AndCondition::new("first".to_string(), "jinny".to_string());
+        let age_condition = AndCondition::new("age".to_string(), "10".to_string());
+        let and_conditions = vec![name_condition, age_condition];
+        let child_condition = OrCondition::new(and_conditions);
+        let parent_condition = OrCondition::from(("first".to_string(), "john".to_string()));
+        let conditions = vec![child_condition, parent_condition];
+
+        let mut expected = vec![john_doe.clone(), jinny_doe.clone()];
+        let mut computed = surfer.apply_all::<UserInfo>(&index_name, &conditions).unwrap().unwrap();
+        expected.sort();
+        computed.sort();
+        assert_eq!(expected, computed);
 
         // Clean-up
         let path = surfer.which_index(&index_name).unwrap();
