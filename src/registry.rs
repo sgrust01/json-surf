@@ -16,7 +16,7 @@ use crate::prelude::join;
 
 use serde::{Serialize};
 use serde::de::DeserializeOwned;
-use failure::_core::fmt::{Debug, Display};
+use std::fmt::{Debug, Display};
 
 
 #[derive(Clone, Eq, PartialEq)]
@@ -182,6 +182,19 @@ pub struct OrCondition {
     conditions: Vec<AndCondition>,
 }
 
+impl Display for OrCondition {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut fragments = Vec::<String>::new();
+        for (index, condition) in self.conditions.iter().enumerate() {
+            if index == 0 {
+                let fragment = format!("{} = {}", condition.resolve_field_name(), condition.resolve_field_value());
+                fragments.push(fragment);
+            }
+        }
+        let x = fragments.join::<&str>(" AND ");
+        write!(f, "{}", x)
+    }
+}
 
 impl OrCondition {
     pub fn new(conditions: Vec<AndCondition>) -> Self {
@@ -550,37 +563,12 @@ impl Surfer {
 
     /// Uses term search
     pub fn read_all_structs_by_field<T: Serialize + DeserializeOwned>(&mut self, index_name: &str, field_name: &str, field_value: &str) -> Result<Option<Vec<T>>, IndexError> {
-        self.read_structs_by_field::<T>(index_name, field_name, field_value, None, None)
+        self.read_structs_by_field::<T>(index_name, field_name, field_value, None, Some(0f32))
     }
     /// Uses term search
     pub fn read_structs_by_field<T: Serialize + DeserializeOwned>(&mut self, index_name: &str, field_name: &str, field_value: &str, limit: Option<usize>, score: Option<f32>) -> Result<Option<Vec<T>>, IndexError> {
-        let schema = self._resolve_surfer_schema(index_name)?;
-        let term = self._build_term(schema, field_name, field_value)?;
-        let query = self._build_term_query(term, None)?;
-        let limit = self._resolve_limit(limit);
-        let _ = self._prepare_index_reader(index_name)?;
-        let reader = self.readers.get(index_name).unwrap().as_ref().unwrap();
-        let searcher = reader.searcher();
-        let top_docs = searcher
-            .search(&query, &TopDocs::with_limit(limit))
-            .map_err(|e| {
-                let message = "Error while term query".to_string();
-                let reason = e.to_string();
-                IndexError::new(message, reason)
-            })?;
-
-
-        let mut docs = Vec::with_capacity(top_docs.len());
-        for (doc_score, doc_address) in top_docs {
-            if score.is_some() && doc_score < score.unwrap() {
-                continue;
-            }
-            let doc = searcher.doc(doc_address)?;
-            let doc = self.jsonify(index_name, &doc)?;
-            let doc = serde_json::from_str::<T>(&doc).unwrap();
-            docs.push(doc);
-        };
-        Ok(Some(docs))
+        let conditions = vec![OrCondition::from((field_name.to_string(), field_value.to_string()))];
+        self.multiple_structs_by_field::<T>(index_name, &conditions, limit, score)
     }
 
     /// Reads as string
@@ -684,6 +672,7 @@ impl Surfer {
         let mut all_docs = HashSet::<SurferDocAddress>::new();
         for condition in conditions {
             let and = condition.resolve_conditions();
+
             let mut docs = HashSet::new();
             for (i, c) in and.iter().enumerate() {
                 let field_name = c.resolve_field_name();
@@ -704,13 +693,14 @@ impl Surfer {
                     if score < cutoff {
                         continue;
                     };
+
+                    let address = SurferDocAddress::from(address);
+                    // println!("Found: {}", address);
                     if i == 0 {
-                        let address = SurferDocAddress::from(address);
                         tmp.insert(address);
                         continue;
                     }
 
-                    let address = SurferDocAddress::from(address);
                     if docs.contains(&address) {
                         tmp.insert(address);
                     }
