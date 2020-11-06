@@ -1,6 +1,6 @@
 [package]
 name = "json-surf"
-version = "0.8.0"
+version = "0.9.0"
 authors = ["Saurav Gupta <sgrust01@gmail.com>"]
 edition = "2018"
 description = """
@@ -27,6 +27,10 @@ tantivy = "0.13.0"
 
 # Supports Spelling correction
 symspell="0.4.1"
+
+[[example]]
+name="usage"
+path="examples/00_usage.rs"
 
 
 [[example]]
