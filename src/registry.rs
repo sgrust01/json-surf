@@ -327,6 +327,7 @@ impl Surfer {
                 return Ok(());
             };
         }
+
         let writer = self.writers.get_mut(name).unwrap().as_mut().unwrap();
 
         let index = self.indexes.get(name).unwrap();
@@ -670,9 +671,9 @@ impl Surfer {
         let cutoff = self._resolve_score(score);
         let schema = self._resolve_surfer_schema(index_name)?;
         let mut all_docs = HashSet::<SurferDocAddress>::new();
+
         for condition in conditions {
             let and = condition.resolve_conditions();
-
             let mut docs = HashSet::new();
             for (i, c) in and.iter().enumerate() {
                 let field_name = c.resolve_field_name();
@@ -888,6 +889,129 @@ mod library_tests {
     use std::hash::{Hash, Hasher};
 
 
+    #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+    struct Giant {
+        a: String,
+        c: u64,
+        d: u32,
+        e: u16,
+        f: u8,
+        g: i64,
+        h: i32,
+        i: i16,
+        j: i8,
+        k: f64,
+        l: f32,
+
+    }
+
+    impl Default for Giant {
+        fn default() -> Self {
+            let a: String = "tag1".to_string();
+            let c: u64 = 10000;
+            let d: u32 = 1000;
+            let e: u16 = 100;
+            let f: u8 = 10;
+            let g: i64 = 20000;
+            let h: i32 = 2000;
+            let i: i16 = 200;
+            let j: i8 = 20;
+            let k: f64 = 10.0;
+            let l: f32 = 1.0;
+            Giant {
+                a,
+                c,
+                d,
+                e,
+                f,
+                g,
+                h,
+                i,
+                j,
+                k,
+                l,
+
+            }
+        }
+    }
+
+    #[test]
+    fn validate_giant() {
+        let name = random_string(None);
+        let home = ".validate_giant";
+        let index_path = format!("{}/{}", home, name);
+        let path = Path::new(&index_path);
+        assert!(!path.exists());
+
+        let giant = Giant::default();
+
+        let mut builder = SurferBuilder::default();
+        builder.set_home(home);
+        builder.add_struct("giant".to_string(), &giant);
+        let mut surfer = Surfer::try_from(builder).unwrap();
+        let data = vec![Giant::default()];
+        let computed = surfer.insert_structs("giant", &data);
+        assert!(computed.is_ok());
+        let a: String = "tag1".to_string();
+        let c: u64 = 10000;
+        let d: u32 = 1000;
+        let e: u16 = 100;
+        let f: u8 = 10;
+        let g: i64 = 20000;
+        let h: i32 = 2000;
+        let i: i16 = 200;
+        let j: i8 = 20;
+        let k: f64 = 10.0;
+        let l: f32 = 1.0;
+
+        let conditions = vec![
+            AndCondition::new("a".to_string(), format!("{}", a)),
+            AndCondition::new("c".to_string(), format!("{}", c)),
+            AndCondition::new("d".to_string(), format!("{}", d)),
+            AndCondition::new("e".to_string(), format!("{}", e)),
+            AndCondition::new("g".to_string(), format!("{}", g)),
+            AndCondition::new("f".to_string(), format!("{}", f)),
+            AndCondition::new("h".to_string(), format!("{}", h)),
+            AndCondition::new("i".to_string(), format!("{}", i)),
+            AndCondition::new("j".to_string(), format!("{}", j)),
+            AndCondition::new("k".to_string(), format!("{}", k)),
+            AndCondition::new("l".to_string(), format!("{}", l)),
+        ];
+        let conditions = vec![OrCondition::new(conditions)];
+        let computed = surfer.multiple_structs_by_field::<Giant>("giant", &conditions, None, Some(0.0));
+        assert!(computed.is_ok());
+        let computed = computed.unwrap();
+        assert!(computed.is_some());
+        let computed = computed.unwrap();
+        assert_eq!(computed, vec![Giant::default()]);
+
+        let computed = surfer.multiple_structs_by_field::<Giant>("giant", &conditions, None, None);
+        assert!(computed.is_ok());
+
+
+        let computed = surfer.delete_structs_by_field("giant", "c", "crap");
+        assert!(computed.is_err());
+
+        let computed = surfer.delete_structs_by_field("giant", "c", "crap");
+        assert!(computed.is_err());
+
+        let computed = surfer.delete_structs_by_field("giant", "g", "crap");
+        assert!(computed.is_err());
+
+        let computed = surfer.delete_structs_by_field("giant", "k", "crap");
+        assert!(computed.is_err());
+
+        let computed = surfer.delete_structs_by_field("giant", "crap", "crap");
+        assert!(computed.is_err());
+
+        let computed = surfer.delete_structs_by_field("crap", "crap", "crap");
+        assert!(computed.is_err());
+
+        let _ = remove_dir_all(index_path);
+        let _ = remove_dir_all(home);
+    }
+
+
     #[derive(Clone, Serialize, Debug, Deserialize, PartialEq)]
     struct OldMan {
         title: String,
@@ -908,7 +1032,7 @@ mod library_tests {
     #[test]
     fn validate_read_existing_documents_as_structs() {
         let name = random_string(None);
-        let home = "tmp";
+        let home = ".validate_read_existing_documents_as_structs";
         let index_path = format!("{}/{}", home, name);
         let path = Path::new(&index_path);
         assert!(!path.exists());
@@ -1162,11 +1286,78 @@ mod library_tests {
         let _ = remove_dir_all(home);
     }
 
-    #[derive(Serialize)]
+    #[derive(Serialize, Deserialize)]
     struct Dummy {
         x: String,
         y: String,
         z: u64,
+    }
+
+    #[test]
+    fn check_invalid_index_name() {
+        let home = random_string(None);
+        let data = Dummy {
+            x: "X".to_owned(),
+            y: "Y".to_owned(),
+            z: 100u64,
+        };
+        let mut builder = SurferBuilder::default();
+        builder.set_home(&home);
+        builder.add_struct("dummy".to_string(), &data);
+        let surfer = Surfer::try_from(builder).unwrap();
+        let computed = surfer.which_index("crap");
+        assert!(computed.is_none());
+        let home = Path::new(&home);
+        assert!(home.exists());
+        let index_path = surfer.which_index("dummy").unwrap();
+        let _ = remove_dir_all(&index_path);
+        let _ = remove_dir_all(&home);
+    }
+
+    #[test]
+    fn check_invalid_index_insert() {
+        let home = random_string(None);
+        let data = Dummy {
+            x: "X".to_owned(),
+            y: "Y".to_owned(),
+            z: 100u64,
+        };
+        let mut builder = SurferBuilder::default();
+        builder.set_home(&home);
+        builder.add_struct("dummy".to_string(), &data);
+        let mut surfer = Surfer::try_from(builder).unwrap();
+        let data = vec![data];
+        let computed = surfer.insert_structs("crap", &data);
+        assert!(computed.is_ok());
+        let index_path = surfer.which_index("dummy").unwrap();
+        let _ = remove_dir_all(&index_path);
+        let _ = remove_dir_all(&home);
+    }
+
+    #[test]
+    fn check_invalid_index_lookup() {
+        let name = random_string(None);
+        let home = ".check_invalid_index_lookup";
+        let index_path = format!("{}/{}", home, name);
+        let path = Path::new(&index_path);
+        assert!(!path.exists());
+
+
+        let data = Dummy {
+            x: "X".to_owned(),
+            y: "Y".to_owned(),
+            z: 100u64,
+        };
+        let mut builder = SurferBuilder::default();
+        builder.set_home(&home);
+        let mut surfer = Surfer::try_from(builder).unwrap();
+        let _ = surfer.insert_struct("dummy", &data).unwrap();
+        let computed = surfer.read_structs::<Dummy>("crap", "X", None, None);
+        assert!(computed.is_ok());
+        let computed = computed.unwrap();
+        assert!(computed.is_none());
+        let _ = remove_dir_all(&path);
+        let _ = remove_dir_all(&home);
     }
 
     #[test]

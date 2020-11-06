@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 use std::convert::{From, TryFrom};
+use std::fs::{create_dir, remove_dir_all, File};
 
 use symspell;
 use symspell::{AsciiStringStrategy, SymSpell, Verbosity};
@@ -150,6 +151,7 @@ impl From<PathBuf> for FuzzyConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::Path;
 
     #[test]
     fn validate_default_fuzzy_config() {
@@ -181,5 +183,39 @@ mod tests {
         assert!(suggestions.is_some());
         let suggestions = suggestions.unwrap();
         assert_eq!(suggestions, vec!["saurav".to_string()]);
+    }
+
+    #[test]
+    fn validate_fuzzy_word() {
+        let word = FuzzyWord::new(None);
+        assert_eq!(word.corpus(), None)
+    }
+
+    #[test]
+    fn test_for_empty_corpus() {
+        let name = random_string(None);
+        let home = ".test_for_empty_corpus";
+        let index_path = home;
+        let path = Path::new(&index_path);
+        let file_path = format!("{}/{}", index_path, "tmp.txt");
+        assert!(!path.exists());
+        let result = create_dir(path);
+        assert!(result.is_ok());
+        let path = format!("{}/{}", home, "foo.txt");
+        let path = Path::new(&path);
+        let display = path.display();
+
+        // Open a file in write-only mode, returns `io::Result<File>`
+        {
+            let result = File::create(&path);
+            assert!(result.is_ok());
+        }
+
+        let config = FuzzyConfig::new(PathBuf::from(path), 1, 1, "".to_string());
+        let corpus = Some(vec![config]);
+
+        let word = FuzzyWord::new(corpus);
+        let _ = remove_dir_all(index_path);
+        // let _ = remove_dir_all(home);
     }
 }

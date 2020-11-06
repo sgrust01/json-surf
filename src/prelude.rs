@@ -1,4 +1,4 @@
-pub use crate::registry::{Surfer, SurferBuilder, SurferSchema, Control};
+pub use crate::registry::{Surfer, SurferBuilder, SurferSchema, Control, AndCondition, OrCondition};
 pub use crate::errors::IndexError;
 
 pub use crate::utils::field_names;
