@@ -229,13 +229,23 @@ impl Surf {
             surfer,
         }
     }
+    /// Use apply to manage and limit the output
     pub fn apply<T: Serialize + DeserializeOwned>(&mut self, index_name: &str, conditions: &Vec<OrCondition>, limit: Option<usize>, score: Option<f32>) -> Result<Option<Vec<T>>, IndexError> {
         self.surfer.multiple_structs_by_field(index_name, conditions, limit, score)
     }
+    /// Similar to SQL Select
     pub fn select<T: Serialize + DeserializeOwned>(&mut self, index_name: &str, conditions: &Vec<OrCondition>) -> Result<Option<Vec<T>>, IndexError> {
         let limit = Some(100usize);
         let score = Some(0f32);
         self.apply(index_name, conditions, limit, score)
+    }
+    /// Similar to SQL Insert
+    pub fn insert<T: Serialize>(&mut self, name: &str, payload: &Vec<T>) -> Result<(), IndexError> {
+        self.surfer.insert_structs::<T>(name, payload)
+    }
+    /// Aims to be similar to SQL Delete
+    pub fn delete(&mut self, index_name: &str, field_name: &str, field_value: &str) -> Result<(), IndexError> {
+        self.surfer.delete_structs_by_field(index_name, field_name, field_value)
     }
 }
 

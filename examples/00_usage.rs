@@ -68,9 +68,8 @@ fn main() {
     let jane_doe = UserInfo::new(first, last, age);
 
     // See examples for more options
-    let users = vec![jane_doe.clone()];
-    let _ = surf.insert_struct(&index_name, &john_doe).unwrap();
-    let _ = surf.insert_structs(&index_name, &users).unwrap();
+    let users = vec![john_doe.clone(), jane_doe.clone()];
+    let _ = surf.insert(&index_name, &users).unwrap();
 
     block_thread(1);
 
@@ -96,6 +95,20 @@ fn main() {
     expected.sort();
     computed.sort();
     assert_eq!(expected, computed);
+
+    // Validated John's record - Alternate shortcut for query using one field only
+    let computed = surf.read_all_structs_by_field(&index_name, "age", "20");
+    let computed: Vec<UserInfo> = computed.unwrap().unwrap();
+    assert_eq!(vec![john_doe], computed);
+
+    // Delete John's record
+    let result = surf.delete(&index_name, "age", "20");
+    assert!(result.is_ok());
+
+    // John's was removed
+    let computed = surf.read_all_structs_by_field(&index_name, "age", "20");
+    let computed: Vec<UserInfo> = computed.unwrap().unwrap();
+    assert!(computed.is_empty());
 
 
     // Clean-up
