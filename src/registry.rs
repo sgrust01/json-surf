@@ -229,7 +229,6 @@ impl Surf {
             surfer,
         }
     }
-
     pub fn apply<T: Serialize + DeserializeOwned>(&mut self, index_name: &str, conditions: &Vec<OrCondition>, limit: Option<usize>, score: Option<f32>) -> Result<Option<Vec<T>>, IndexError> {
         self.surfer.multiple_structs_by_field(index_name, conditions, limit, score)
     }
@@ -256,6 +255,14 @@ impl DerefMut for Surf {
 impl From<Surfer> for Surf {
     fn from(surfer: Surfer) -> Self {
         Self::new(surfer)
+    }
+}
+
+impl TryFrom<SurferBuilder> for Surf {
+    type Error = IndexError;
+    fn try_from(builder: SurferBuilder) -> Result<Self, Self::Error> {
+        let surfer = Surfer::try_from(builder)?;
+        Ok(Surf::from(surfer))
     }
 }
 
