@@ -76,14 +76,14 @@ fn main() {
     // See examples for more options
     // Similar to SELECT * FROM users WHERE (age = 20 AND last = "Doe") OR (first = "Jane")
     let conditions = vec![
-        // (age = 20 AND last = "Doe")
         OrCondition::new(
+            // (age = 20 AND last = "Doe")
             vec![
                 AndCondition::new("age".to_string(), "20".to_string()),
                 AndCondition::new("last".to_string(), "doe".to_string())
             ]),
-        // (first = "Jane")
         OrCondition::new(
+            // (first = "Jane")
             vec![
                 AndCondition::new("first".to_string(), "jane".to_string())
             ])
