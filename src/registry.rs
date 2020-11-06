@@ -232,7 +232,7 @@ impl Surf {
     pub fn apply<T: Serialize + DeserializeOwned>(&mut self, index_name: &str, conditions: &Vec<OrCondition>, limit: Option<usize>, score: Option<f32>) -> Result<Option<Vec<T>>, IndexError> {
         self.surfer.multiple_structs_by_field(index_name, conditions, limit, score)
     }
-    pub fn apply_all<T: Serialize + DeserializeOwned>(&mut self, index_name: &str, conditions: &Vec<OrCondition>) -> Result<Option<Vec<T>>, IndexError> {
+    pub fn select<T: Serialize + DeserializeOwned>(&mut self, index_name: &str, conditions: &Vec<OrCondition>) -> Result<Option<Vec<T>>, IndexError> {
         let limit = Some(100usize);
         let score = Some(0f32);
         self.apply(index_name, conditions, limit, score)
@@ -1590,7 +1590,7 @@ mod library_tests {
 
         let conditions = vec![OrCondition::from(("age".to_string(), "10".to_string()))];
         let mut expected = vec![jonny_doe.clone(), jinny_doe.clone()];
-        let mut computed = surfer.apply_all::<UserInfo>(&index_name, &conditions).unwrap().unwrap();
+        let mut computed = surfer.select::<UserInfo>(&index_name, &conditions).unwrap().unwrap();
         expected.sort();
         computed.sort();
         assert_eq!(expected, computed);
@@ -1598,7 +1598,7 @@ mod library_tests {
         let conditions = vec![OrCondition::from(("age".to_string(), "10".to_string())),
                               OrCondition::from(("first".to_string(), "john".to_string()))];
         let mut expected = vec![john_doe.clone(), jonny_doe.clone(), jinny_doe.clone()];
-        let mut computed = surfer.apply_all::<UserInfo>(&index_name, &conditions).unwrap().unwrap();
+        let mut computed = surfer.select::<UserInfo>(&index_name, &conditions).unwrap().unwrap();
         expected.sort();
         computed.sort();
         assert_eq!(expected, computed);
@@ -1612,7 +1612,7 @@ mod library_tests {
         let conditions = vec![child_condition, parent_condition];
 
         let mut expected = vec![john_doe.clone(), jinny_doe.clone()];
-        let mut computed = surfer.apply_all::<UserInfo>(&index_name, &conditions).unwrap().unwrap();
+        let mut computed = surfer.select::<UserInfo>(&index_name, &conditions).unwrap().unwrap();
         expected.sort();
         computed.sort();
         assert_eq!(expected, computed);

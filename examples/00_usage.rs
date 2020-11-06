@@ -91,7 +91,7 @@ fn main() {
     ];
 
     // Validate John and Jane Doe
-    let mut computed = surf.apply_all::<UserInfo>(&index_name, &conditions).unwrap().unwrap();
+    let mut computed = surf.select::<UserInfo>(&index_name, &conditions).unwrap().unwrap();
     let mut expected = vec![john_doe.clone(), jane_doe.clone(), ];
     expected.sort();
     computed.sort();
