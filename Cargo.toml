@@ -23,7 +23,7 @@ failure= "0.1.6"
 rand = "0.7.3"
 
 # Star of the show
-tantivy = "0.13.0"
+tantivy = "0.13.2"
 
 # Supports Spelling correction
 symspell="0.4.1"
